@@ -7,64 +7,65 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * AutorDAO - Acceso a datos para la entidad Autor.
- * Utiliza eliminación lógica (campo estado).
- */
+/** DAO de Autores (usa baja lógica con IsActive) */
 public class AutorDAO {
 
-    // ===== LISTAR TODOS =====
+    // LISTAR TODOS
     public List<Autor> listarTodos() throws Exception {
+        String sql = "SELECT Id, Nombre, Pais, IsActive FROM dbo.Autores ORDER BY Nombre";
         List<Autor> lista = new ArrayList<>();
-        String sql = "SELECT id, nombre, estado FROM Autor ORDER BY nombre";
-
         try (Connection cn = Conexion.getConnection();
              PreparedStatement ps = cn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
-
             while (rs.next()) {
-                Autor a = new Autor(
-                        rs.getInt("id"),
-                        rs.getString("nombre"),
-                        rs.getBoolean("estado")
-                );
-                lista.add(a);
+                lista.add(map(rs));
             }
         }
         return lista;
     }
 
-    // ===== CREAR =====
+    // LISTAR ACTIVOS
+    public List<Autor> listarActivos() throws Exception {
+        String sql = "SELECT Id, Nombre, Pais, IsActive FROM dbo.Autores WHERE IsActive = 1 ORDER BY Nombre";
+        List<Autor> lista = new ArrayList<>();
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                lista.add(map(rs));
+            }
+        }
+        return lista;
+    }
+
+    // CREAR
     public void crear(Autor autor) throws Exception {
-        String sql = "INSERT INTO Autor(nombre, estado) VALUES (?, ?)";
-
+        String sql = "INSERT INTO dbo.Autores (Nombre, Pais, IsActive) VALUES (?, ?, ?)";
         try (Connection cn = Conexion.getConnection();
              PreparedStatement ps = cn.prepareStatement(sql)) {
-
             ps.setString(1, autor.getNombre());
-            ps.setBoolean(2, autor.isEstado());
+            ps.setString(2, autor.getPais());
+            ps.setBoolean(3, autor.isActivo());
             ps.executeUpdate();
         }
     }
 
-    // ===== ACTUALIZAR =====
+    // ACTUALIZAR
     public void actualizar(Autor autor) throws Exception {
-        String sql = "UPDATE Autor SET nombre = ?, estado = ? WHERE id = ?";
-
+        String sql = "UPDATE dbo.Autores SET Nombre = ?, Pais = ?, IsActive = ? WHERE Id = ?";
         try (Connection cn = Conexion.getConnection();
              PreparedStatement ps = cn.prepareStatement(sql)) {
-
             ps.setString(1, autor.getNombre());
-            ps.setBoolean(2, autor.isEstado());
-            ps.setInt(3, autor.getId());
+            ps.setString(2, autor.getPais());
+            ps.setBoolean(3, autor.isActivo());
+            ps.setInt(4, autor.getId());
             ps.executeUpdate();
         }
     }
 
-    // ===== ELIMINAR LÓGICO =====
+    // BAJA LÓGICA
     public void eliminarLogico(int id) throws Exception {
-        String sql = "UPDATE Autor SET estado = 0 WHERE id = ?";
-
+        String sql = "UPDATE dbo.Autores SET IsActive = 0 WHERE Id = ?";
         try (Connection cn = Conexion.getConnection();
              PreparedStatement ps = cn.prepareStatement(sql)) {
             ps.setInt(1, id);
@@ -72,43 +73,25 @@ public class AutorDAO {
         }
     }
 
-    // ===== BUSCAR POR ID =====
+    // BUSCAR POR ID
     public Autor buscarPorId(int id) throws Exception {
-        Autor a = null;
-        String sql = "SELECT id, nombre, estado FROM Autor WHERE id = ?";
-
+        String sql = "SELECT Id, Nombre, Pais, IsActive FROM dbo.Autores WHERE Id = ?";
         try (Connection cn = Conexion.getConnection();
              PreparedStatement ps = cn.prepareStatement(sql)) {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    a = new Autor();
-                    a.setId(rs.getInt("id"));
-                    a.setNombre(rs.getString("nombre"));
-                    a.setEstado(rs.getBoolean("estado"));
-                }
+                return rs.next() ? map(rs) : null;
             }
         }
-        return a;
     }
 
-    // ===== LISTAR ACTIVOS =====
-    public List<Autor> listarActivos() throws Exception {
-        List<Autor> lista = new ArrayList<>();
-        String sql = "SELECT id, nombre, estado FROM Autor WHERE estado = 1 ORDER BY nombre";
-
-        try (Connection cn = Conexion.getConnection();
-             PreparedStatement ps = cn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-
-            while (rs.next()) {
-                Autor a = new Autor();
-                a.setId(rs.getInt("id"));
-                a.setNombre(rs.getString("nombre"));
-                a.setEstado(rs.getBoolean("estado"));
-                lista.add(a);
-            }
-        }
-        return lista;
+    // --- mapper ---
+    private Autor map(ResultSet rs) throws SQLException {
+        Autor a = new Autor();
+        a.setId(rs.getInt("Id"));
+        a.setNombre(rs.getString("Nombre"));
+        a.setPais(rs.getString("Pais"));
+        a.setActivo(rs.getBoolean("IsActive"));
+        return a;
     }
 }

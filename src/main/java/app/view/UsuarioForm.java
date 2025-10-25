@@ -1,85 +1,78 @@
 package app.view;
 
 import app.dao.UsuarioDAO;
+import app.model.Rol;
 import app.model.Usuario;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.List;
 
-/**
- * UsuarioForm - Formulario para gestionar usuarios y asignar roles
- */
 public class UsuarioForm extends JFrame {
 
     private JTable tableUsuarios;
-    private JTextField txtUsername, txtNombre, txtEmail;
+    private JTextField txtUsername, txtNombre, txtEmail, txtTelefono;
     private JPasswordField txtPassword;
-    private JComboBox<String> cmbRoles;
+    private JComboBox<Rol> cmbRoles;
+    private JCheckBox chkActivo;
     private JButton btnGuardar, btnActualizar, btnEliminar, btnLimpiar;
 
-    private UsuarioDAO usuarioDAO;
+    private final UsuarioDAO usuarioDAO = new UsuarioDAO();
     private int usuarioSeleccionadoId = -1;
-
-    // Roles fijos para el proyecto
-    private final String[] ROLES = {"Administrador", "Bibliotecario", "Financiero", "Cliente"};
 
     public UsuarioForm() {
         setTitle("Gestión de Usuarios");
-        setSize(800, 500);
+        setSize(900, 560);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
-        usuarioDAO = new UsuarioDAO();
-
         initComponents();
+        cargarRoles();
         cargarTablaUsuarios();
     }
 
     private void initComponents() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
-        JPanel panelFormulario = new JPanel(new GridLayout(6, 2, 10, 10));
+        JPanel form = new JPanel(new GridLayout(7, 2, 8, 8));
+        form.setBorder(BorderFactory.createTitledBorder("Datos del usuario"));
 
-        // Campos del formulario
         txtUsername = new JTextField();
         txtPassword = new JPasswordField();
         txtNombre = new JTextField();
         txtEmail = new JTextField();
-        cmbRoles = new JComboBox<>(ROLES);
+        txtTelefono = new JTextField();
+        cmbRoles = new JComboBox<>();
+        chkActivo = new JCheckBox("Activo", true);
 
-        panelFormulario.add(new JLabel("Username:"));
-        panelFormulario.add(txtUsername);
-        panelFormulario.add(new JLabel("Contraseña:"));
-        panelFormulario.add(txtPassword);
-        panelFormulario.add(new JLabel("Nombre completo:"));
-        panelFormulario.add(txtNombre);
-        panelFormulario.add(new JLabel("Email:"));
-        panelFormulario.add(txtEmail);
-        panelFormulario.add(new JLabel("Rol:"));
-        panelFormulario.add(cmbRoles);
+        form.add(new JLabel("Username:"));     form.add(txtUsername);
+        form.add(new JLabel("Contraseña:"));   form.add(txtPassword);
+        form.add(new JLabel("Nombre completo:")); form.add(txtNombre);
+        form.add(new JLabel("Email:"));        form.add(txtEmail);
+        form.add(new JLabel("Teléfono:"));     form.add(txtTelefono);
+        form.add(new JLabel("Rol principal:"));form.add(cmbRoles);
+        form.add(new JLabel("Estado:"));       form.add(chkActivo);
 
         btnGuardar = new JButton("Guardar");
         btnActualizar = new JButton("Actualizar");
-        btnEliminar = new JButton("Eliminar");
+        btnEliminar = new JButton("Desactivar");
         btnLimpiar = new JButton("Limpiar");
 
-        JPanel panelBotones = new JPanel(new FlowLayout());
-        panelBotones.add(btnGuardar);
-        panelBotones.add(btnActualizar);
-        panelBotones.add(btnEliminar);
-        panelBotones.add(btnLimpiar);
+        JPanel acciones = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        acciones.add(btnGuardar);
+        acciones.add(btnActualizar);
+        acciones.add(btnEliminar);
+        acciones.add(btnLimpiar);
 
-        panelFormulario.add(panelBotones);
+        form.add(new JLabel()); form.add(acciones);
 
-        // Tabla de usuarios
         tableUsuarios = new JTable();
-        JScrollPane scrollPane = new JScrollPane(tableUsuarios);
+        JScrollPane sp = new JScrollPane(tableUsuarios);
 
-        panel.add(panelFormulario, BorderLayout.NORTH);
-        panel.add(scrollPane, BorderLayout.CENTER);
-
+        panel.add(form, BorderLayout.NORTH);
+        panel.add(sp, BorderLayout.CENTER);
         add(panel);
 
         // Eventos
@@ -89,121 +82,160 @@ public class UsuarioForm extends JFrame {
         btnLimpiar.addActionListener(e -> limpiarFormulario());
 
         tableUsuarios.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
+            @Override public void mouseClicked(MouseEvent e) {
                 int fila = tableUsuarios.getSelectedRow();
                 if (fila >= 0) {
-                    usuarioSeleccionadoId = Integer.parseInt(tableUsuarios.getValueAt(fila, 0).toString());
-                    txtUsername.setText(tableUsuarios.getValueAt(fila, 1).toString());
-                    txtNombre.setText(tableUsuarios.getValueAt(fila, 2).toString());
-                    txtEmail.setText(tableUsuarios.getValueAt(fila, 3).toString());
-                    cmbRoles.setSelectedIndex(Integer.parseInt(tableUsuarios.getValueAt(fila, 4).toString()) - 1);
+                    usuarioSeleccionadoId = (int) tableUsuarios.getValueAt(fila, 0);
+                    txtUsername.setText((String) tableUsuarios.getValueAt(fila, 1));
+                    txtNombre.setText((String) tableUsuarios.getValueAt(fila, 2));
+                    txtEmail.setText((String) tableUsuarios.getValueAt(fila, 3));
+                    txtTelefono.setText((String) tableUsuarios.getValueAt(fila, 4));
+                    String rolNombre = (String) tableUsuarios.getValueAt(fila, 5);
+                    seleccionarRolEnCombo(rolNombre);
+                    chkActivo.setSelected("Activo".equals(tableUsuarios.getValueAt(fila, 6)));
+                    txtPassword.setText(""); // nunca mostramos passwords
                 }
             }
         });
+    }
+
+    private void cargarRoles() {
+        try {
+            cmbRoles.removeAllItems();
+            List<Rol> roles = usuarioDAO.listarRoles();
+            for (Rol r : roles) cmbRoles.addItem(r);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error al cargar roles: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void cargarTablaUsuarios() {
         try {
             List<Usuario> lista = usuarioDAO.listarTodos();
-            String[] columnas = {"ID", "Username", "Nombre completo", "Email", "Rol", "Estado"};
-            DefaultTableModel model = new DefaultTableModel(columnas, 0) {
-                @Override
-                public boolean isCellEditable(int row, int column) {
-                    return false; // tabla solo lectura
-                }
+            String[] cols = {"ID", "Username", "Nombre completo", "Email", "Teléfono", "Rol", "Estado"};
+            DefaultTableModel model = new DefaultTableModel(cols, 0) {
+                @Override public boolean isCellEditable(int r, int c) { return false; }
             };
             for (Usuario u : lista) {
-                Object[] fila = {
+                model.addRow(new Object[]{
                         u.getId(),
                         u.getUsername(),
                         u.getNombreCompleto(),
                         u.getEmail(),
-                        u.getIdRol(),
-                        u.isEstado() ? "Activo" : "Inactivo"
-                };
-                model.addRow(fila);
+                        u.getTelefono(),
+                        u.getRolPrincipal() != null ? u.getRolPrincipal() : "(sin rol)",
+                        u.isActivo() ? "Activo" : "Inactivo"
+                });
             }
             tableUsuarios.setModel(model);
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error al cargar usuarios: " + ex.getMessage());
+            JOptionPane.showMessageDialog(this, "Error al cargar usuarios: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void guardarUsuario() {
         try {
-            Usuario u = new Usuario();
-            u.setUsername(txtUsername.getText());
-            u.setPasswordHash(new String(txtPassword.getPassword())); // luego se debe hashear con BCrypt
-            u.setNombreCompleto(txtNombre.getText());
-            u.setEmail(txtEmail.getText());
-            u.setIdRol(cmbRoles.getSelectedIndex() + 1);
-            u.setEstado(true);
+            if (txtUsername.getText().isBlank() || txtNombre.getText().isBlank()
+                    || txtEmail.getText().isBlank() || txtPassword.getPassword().length == 0) {
+                JOptionPane.showMessageDialog(this, "Completa Username, Nombre, Email y Contraseña.", "Validación", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
 
-            usuarioDAO.crear(u);
+            Usuario u = new Usuario();
+            u.setUsername(txtUsername.getText().trim());
+            u.setNombreCompleto(txtNombre.getText().trim());
+            u.setEmail(txtEmail.getText().trim());
+            u.setTelefono(txtTelefono.getText().trim());
+            u.setActivo(chkActivo.isSelected());
+
+            Rol r = (Rol) cmbRoles.getSelectedItem();
+            if (r != null) u.setRolPrincipalId(r.getId());
+
+            String passwordPlano = new String(txtPassword.getPassword()); // BCrypt en DAO
+            usuarioDAO.crear(u, passwordPlano);
+
             JOptionPane.showMessageDialog(this, "Usuario creado correctamente.");
             cargarTablaUsuarios();
             limpiarFormulario();
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error al crear usuario: " + ex.getMessage());
+            JOptionPane.showMessageDialog(this, "Error al crear usuario: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void actualizarUsuario() {
         if (usuarioSeleccionadoId == -1) {
-            JOptionPane.showMessageDialog(this, "Seleccione un usuario de la tabla.");
+            JOptionPane.showMessageDialog(this, "Seleccione un usuario en la tabla.");
             return;
         }
         try {
             Usuario u = usuarioDAO.buscarPorId(usuarioSeleccionadoId);
-            u.setUsername(txtUsername.getText());
-            String pass = new String(txtPassword.getPassword());
-            if (!pass.isEmpty()) {
-                u.setPasswordHash(pass); // hashear con BCrypt
-            }
-            u.setNombreCompleto(txtNombre.getText());
-            u.setEmail(txtEmail.getText());
-            u.setIdRol(cmbRoles.getSelectedIndex() + 1);
+            if (u == null) { JOptionPane.showMessageDialog(this, "Usuario no encontrado."); return; }
 
+            u.setUsername(txtUsername.getText().trim());
+            u.setNombreCompleto(txtNombre.getText().trim());
+            u.setEmail(txtEmail.getText().trim());
+            u.setTelefono(txtTelefono.getText().trim());
+            u.setActivo(chkActivo.isSelected());
+
+            Rol r = (Rol) cmbRoles.getSelectedItem();
+            if (r != null) u.setRolPrincipalId(r.getId());
+
+            // Si el campo password no está vacío, actualiza el hash
+            String pass = new String(txtPassword.getPassword());
+            if (!pass.isBlank()) {
+                usuarioDAO.actualizarPasswordPlano(u.getId(), pass); // BCrypt
+            }
             usuarioDAO.actualizar(u);
-            JOptionPane.showMessageDialog(this, "Usuario actualizado correctamente.");
+
+            JOptionPane.showMessageDialog(this, "Usuario actualizado.");
             cargarTablaUsuarios();
             limpiarFormulario();
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error al actualizar usuario: " + ex.getMessage());
+            JOptionPane.showMessageDialog(this, "Error al actualizar: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void eliminarUsuario() {
         if (usuarioSeleccionadoId == -1) {
-            JOptionPane.showMessageDialog(this, "Seleccione un usuario de la tabla.");
+            JOptionPane.showMessageDialog(this, "Seleccione un usuario en la tabla.");
             return;
         }
         try {
-            int opcion = JOptionPane.showConfirmDialog(this, "¿Seguro desea desactivar el usuario?", "Confirmar", JOptionPane.YES_NO_OPTION);
-            if (opcion == JOptionPane.YES_OPTION) {
+            int op = JOptionPane.showConfirmDialog(this, "¿Desactivar este usuario?", "Confirmar", JOptionPane.YES_NO_OPTION);
+            if (op == JOptionPane.YES_OPTION) {
                 usuarioDAO.eliminarLogico(usuarioSeleccionadoId);
-                JOptionPane.showMessageDialog(this, "Usuario desactivado correctamente.");
+                JOptionPane.showMessageDialog(this, "Usuario desactivado.");
                 cargarTablaUsuarios();
                 limpiarFormulario();
             }
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error al eliminar usuario: " + ex.getMessage());
+            JOptionPane.showMessageDialog(this, "Error al desactivar: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void limpiarFormulario() {
+        usuarioSeleccionadoId = -1;
         txtUsername.setText("");
         txtPassword.setText("");
         txtNombre.setText("");
         txtEmail.setText("");
-        cmbRoles.setSelectedIndex(0);
-        usuarioSeleccionadoId = -1;
+        txtTelefono.setText("");
+        chkActivo.setSelected(true);
+        if (cmbRoles.getItemCount() > 0) cmbRoles.setSelectedIndex(0);
+    }
+
+    private void seleccionarRolEnCombo(String rolNombre) {
+        ComboBoxModel<Rol> m = cmbRoles.getModel();
+        for (int i = 0; i < m.getSize(); i++) {
+            Rol r = m.getElementAt(i);
+            if (r.getNombre().equalsIgnoreCase(rolNombre)) {
+                cmbRoles.setSelectedIndex(i);
+                return;
+            }
+        }
     }
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            new UsuarioForm().setVisible(true);
-        });
+        SwingUtilities.invokeLater(() -> new UsuarioForm().setVisible(true));
     }
 }

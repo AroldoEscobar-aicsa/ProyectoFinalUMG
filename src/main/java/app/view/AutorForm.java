@@ -10,16 +10,14 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.List;
 
-/**
- * AutorForm - Formulario CRUD para la entidad Autor.
- * Compatible con la estructura de proyecto app.* y Conexion.getConnection().
- */
+/** Form CRUD de Autores (dbo.Autores) */
 public class AutorForm extends JFrame {
 
     private final AutorDAO autorDAO = new AutorDAO();
 
-    private JTextField txtId, txtNombre;
-    private JButton btnNuevo, btnGuardar, btnEditar, btnEliminar, btnCerrar;
+    private JTextField txtId, txtNombre, txtPais;
+    private JCheckBox chkActivo;
+    private JButton btnNuevo, btnGuardar, btnEditar, btnEliminar, btnCerrar, btnRefrescar;
     private JTable tablaAutores;
     private DefaultTableModel modelo;
 
@@ -27,13 +25,13 @@ public class AutorForm extends JFrame {
 
     public AutorForm() {
         setTitle("Gestión de Autores");
-        setSize(600, 400);
+        setSize(720, 460);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout(10, 10));
 
         // ===== PANEL DE DATOS =====
-        JPanel panelDatos = new JPanel(new GridLayout(2, 2, 5, 5));
+        JPanel panelDatos = new JPanel(new GridLayout(3, 2, 8, 8));
         panelDatos.setBorder(BorderFactory.createTitledBorder("Datos del Autor"));
 
         panelDatos.add(new JLabel("ID:"));
@@ -45,28 +43,38 @@ public class AutorForm extends JFrame {
         txtNombre = new JTextField();
         panelDatos.add(txtNombre);
 
+        panelDatos.add(new JLabel("País:"));
+        txtPais = new JTextField();
+        panelDatos.add(txtPais);
+
         add(panelDatos, BorderLayout.NORTH);
 
         // ===== TABLA =====
-        String[] columnas = {"ID", "Nombre", "Estado"};
-        modelo = new DefaultTableModel(columnas, 0);
+        String[] columnas = {"ID", "Nombre", "País", "Estado"};
+        modelo = new DefaultTableModel(columnas, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
         tablaAutores = new JTable(modelo);
         JScrollPane scroll = new JScrollPane(tablaAutores);
         add(scroll, BorderLayout.CENTER);
 
         // ===== BOTONES =====
-        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
+        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
 
+        chkActivo = new JCheckBox("Activo", true);
         btnNuevo = new JButton("Nuevo");
         btnGuardar = new JButton("Guardar");
         btnEditar = new JButton("Editar");
         btnEliminar = new JButton("Eliminar");
+        btnRefrescar = new JButton("Refrescar");
         btnCerrar = new JButton("Cerrar");
 
+        panelBotones.add(chkActivo);
         panelBotones.add(btnNuevo);
         panelBotones.add(btnGuardar);
         panelBotones.add(btnEditar);
         panelBotones.add(btnEliminar);
+        panelBotones.add(btnRefrescar);
         panelBotones.add(btnCerrar);
 
         add(panelBotones, BorderLayout.SOUTH);
@@ -76,6 +84,7 @@ public class AutorForm extends JFrame {
         btnGuardar.addActionListener(e -> guardarAutor());
         btnEditar.addActionListener(e -> cargarSeleccionado());
         btnEliminar.addActionListener(e -> eliminarAutor());
+        btnRefrescar.addActionListener(e -> cargarTabla());
         btnCerrar.addActionListener(e -> dispose());
 
         tablaAutores.addMouseListener(new MouseAdapter() {
@@ -88,15 +97,15 @@ public class AutorForm extends JFrame {
         cargarTabla();
     }
 
-    // ===== LIMPIAR CAMPOS =====
     private void limpiarCampos() {
         txtId.setText("");
         txtNombre.setText("");
+        txtPais.setText("");
+        chkActivo.setSelected(true);
         txtNombre.requestFocus();
         modoEdicion = false;
     }
 
-    // ===== CARGAR TABLA =====
     private void cargarTabla() {
         try {
             modelo.setRowCount(0);
@@ -105,7 +114,8 @@ public class AutorForm extends JFrame {
                 modelo.addRow(new Object[]{
                         a.getId(),
                         a.getNombre(),
-                        a.isEstado() ? "Activo" : "Inactivo"
+                        a.getPais(),
+                        a.isActivo() ? "Activo" : "Inactivo"
                 });
             }
         } catch (Exception ex) {
@@ -115,13 +125,12 @@ public class AutorForm extends JFrame {
         }
     }
 
-    // ===== GUARDAR O ACTUALIZAR =====
     private void guardarAutor() {
         String nombre = txtNombre.getText().trim();
+        String pais = txtPais.getText().trim();
 
         if (nombre.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "Ingrese el nombre del autor.",
+            JOptionPane.showMessageDialog(this, "Ingrese el nombre del autor.",
                     "Validación", JOptionPane.WARNING_MESSAGE);
             txtNombre.requestFocus();
             return;
@@ -130,7 +139,8 @@ public class AutorForm extends JFrame {
         try {
             Autor a = new Autor();
             a.setNombre(nombre);
-            a.setEstado(true);
+            a.setPais(pais.isBlank() ? null : pais);
+            a.setActivo(chkActivo.isSelected());
 
             if (modoEdicion) {
                 a.setId(Integer.parseInt(txtId.getText()));
@@ -151,51 +161,46 @@ public class AutorForm extends JFrame {
         }
     }
 
-    // ===== CARGAR AUTOR SELECCIONADO =====
     private void cargarSeleccionado() {
         int fila = tablaAutores.getSelectedRow();
         if (fila == -1) {
-            JOptionPane.showMessageDialog(this,
-                    "Seleccione un autor de la tabla.",
+            JOptionPane.showMessageDialog(this, "Seleccione un autor de la tabla.",
                     "Aviso", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-
-        txtId.setText(tablaAutores.getValueAt(fila, 0).toString());
-        txtNombre.setText(tablaAutores.getValueAt(fila, 1).toString());
+        txtId.setText(String.valueOf(tablaAutores.getValueAt(fila, 0)));
+        txtNombre.setText(String.valueOf(tablaAutores.getValueAt(fila, 1)));
+        txtPais.setText(String.valueOf(tablaAutores.getValueAt(fila, 2)));
+        chkActivo.setSelected("Activo".equals(tablaAutores.getValueAt(fila, 3)));
         modoEdicion = true;
     }
 
-    // ===== ELIMINAR AUTOR =====
     private void eliminarAutor() {
         int fila = tablaAutores.getSelectedRow();
         if (fila == -1) {
-            JOptionPane.showMessageDialog(this,
-                    "Seleccione un autor para eliminar.",
+            JOptionPane.showMessageDialog(this, "Seleccione un autor para eliminar.",
                     "Aviso", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-
-        int id = Integer.parseInt(tablaAutores.getValueAt(fila, 0).toString());
+        int id = Integer.parseInt(String.valueOf(tablaAutores.getValueAt(fila, 0)));
         int resp = JOptionPane.showConfirmDialog(this,
-                "¿Está seguro de eliminar este autor?",
+                "¿Está seguro de desactivar este autor?",
                 "Confirmar", JOptionPane.YES_NO_OPTION);
 
         if (resp == JOptionPane.YES_OPTION) {
             try {
                 autorDAO.eliminarLogico(id);
-                JOptionPane.showMessageDialog(this, "Autor eliminado (baja lógica).");
+                JOptionPane.showMessageDialog(this, "Autor desactivado (baja lógica).");
                 cargarTabla();
                 limpiarCampos();
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this,
-                        "Error al eliminar autor: " + ex.getMessage(),
+                        "Error al desactivar autor: " + ex.getMessage(),
                         "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
 
-    // ===== MAIN TEST =====
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new AutorForm().setVisible(true));
     }

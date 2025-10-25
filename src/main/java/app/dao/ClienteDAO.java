@@ -1,129 +1,190 @@
 package app.dao;
+
 import app.db.Conexion;
 import app.model.Cliente;
 
 import java.sql.*;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * DAO para el Módulo C: Clientes/Usuarios lectores.
- * Sigue el formato de MultaDAO (mapeador y PreparedStatement).
- */
 public class ClienteDAO {
 
-    /**
-     * Registra un nuevo cliente en la base de datos.
-     */
-    public boolean registrarCliente(Cliente cliente) throws SQLException {
-        String sql = "INSERT INTO Cliente (nombres, apellidos, nit, telefono, email, estado, fechaRegistro, eliminado) " +
-                "VALUES (?, ?, ?, ?, ?, ?, GETDATE(), 0)";
+    // ---------- Utilidades ----------
 
-        try (Connection conn = Conexion.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            pstmt.setString(1, cliente.getNombres());
-            pstmt.setString(2, cliente.getApellidos());
-            pstmt.setString(3, cliente.getNit());
-            pstmt.setString(4, cliente.getTelefono());
-            pstmt.setString(5, cliente.getEmail());
-            pstmt.setString(6, cliente.getEstado()); // "Activo"
-
-            return pstmt.executeUpdate() > 0;
+    public boolean existeCodigo(String codigo) throws SQLException {
+        String q = "SELECT 1 FROM dbo.Clientes WHERE Codigo = ?";
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(q)) {
+            ps.setString(1, codigo);
+            try (ResultSet rs = ps.executeQuery()) { return rs.next(); }
         }
     }
 
-    /**
-     * Actualiza la información de un cliente existente.
-     */
-    public boolean actualizarCliente(Cliente cliente) throws SQLException {
-        String sql = "UPDATE Cliente SET nombres = ?, apellidos = ?, nit = ?, telefono = ?, email = ?, estado = ? " +
-                "WHERE idCliente = ? AND eliminado = 0";
-
-        try (Connection conn = Conexion.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            pstmt.setString(1, cliente.getNombres());
-            pstmt.setString(2, cliente.getApellidos());
-            pstmt.setString(3, cliente.getNit());
-            pstmt.setString(4, cliente.getTelefono());
-            pstmt.setString(5, cliente.getEmail());
-            pstmt.setString(6, cliente.getEstado()); // "Activo" o "Bloqueado"
-            pstmt.setInt(7, cliente.getIdCliente());
-
-            return pstmt.executeUpdate() > 0;
+    public Integer getIdByCodigo(String codigo) throws SQLException {
+        String q = "SELECT Id FROM dbo.Clientes WHERE Codigo=? AND IsActive=1";
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(q)) {
+            ps.setString(1, codigo);
+            try (ResultSet rs = ps.executeQuery()) { return rs.next() ? rs.getInt(1) : null; }
         }
     }
 
-    /**
-     * Realiza una eliminación lógica de un cliente[cite: 69].
-     */
-    public boolean eliminarCliente(int idCliente) throws SQLException {
-        String sql = "UPDATE Cliente SET eliminado = 1 WHERE idCliente = ?";
+    // ---------- CRUD ----------
 
-        try (Connection conn = Conexion.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+    public List<Cliente> listarTodos() throws SQLException {
+        String sql = """
+            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado,
+                   FechaRegistroUtc, BloqueadoHastaUtc
+            FROM dbo.Clientes
+            ORDER BY Apellidos, Nombres
+        """;
+        List<Cliente> lista = new ArrayList<>();
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) lista.add(map(rs));
+        }
+        return lista;
+    }
 
-            pstmt.setInt(1, idCliente);
-            return pstmt.executeUpdate() > 0;
+    public List<Cliente> listarActivos() throws SQLException {
+        String sql = """
+            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado,
+                   FechaRegistroUtc, BloqueadoHastaUtc
+            FROM dbo.Clientes
+            WHERE IsActive = 1
+            ORDER BY Apellidos, Nombres
+        """;
+        List<Cliente> lista = new ArrayList<>();
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) lista.add(map(rs));
+        }
+        return lista;
+    }
+
+    public Cliente buscarPorId(int id) throws SQLException {
+        String sql = """
+            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado,
+                   FechaRegistroUtc, BloqueadoHastaUtc
+            FROM dbo.Clientes WHERE Id=?
+        """;
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) { return rs.next() ? map(rs) : null; }
         }
     }
 
-    /**
-     * Busca un cliente por su ID (solo si no está eliminado).
-     */
-    public Cliente buscarClientePorId(int idCliente) throws SQLException {
-        String sql = "SELECT * FROM Cliente WHERE idCliente = ? AND eliminado = 0";
-
-        try (Connection conn = Conexion.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            pstmt.setInt(1, idCliente);
-
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    return mapearResultSet(rs);
-                }
-            }
+    public Cliente buscarPorCodigo(String codigo) throws SQLException {
+        String sql = """
+            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado,
+                   FechaRegistroUtc, BloqueadoHastaUtc
+            FROM dbo.Clientes WHERE Codigo=?
+        """;
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setString(1, codigo);
+            try (ResultSet rs = ps.executeQuery()) { return rs.next() ? map(rs) : null; }
         }
-        return null;
     }
 
-    /**
-     * Lista todos los clientes que NO han sido eliminados lógicamente.
-     */
-    public List<Cliente> listarClientesActivos() throws SQLException {
-        List<Cliente> clientes = new ArrayList<>();
-        String sql = "SELECT * FROM Cliente WHERE eliminado = 0 ORDER BY apellidos, nombres";
-
-        try (Connection conn = Conexion.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-
-            while (rs.next()) {
-                clientes.add(mapearResultSet(rs));
-            }
+    /** Inserta con FechaRegistroUtc = SYSUTCDATETIME(). */
+    public void crear(Cliente c) throws SQLException {
+        String sql = """
+            INSERT INTO dbo.Clientes (Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado, FechaRegistroUtc)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME())
+        """;
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            ps.setString(1, c.getCodigo());
+            ps.setString(2, c.getNombres());
+            ps.setString(3, c.getApellidos());
+            ps.setString(4, nullIfBlank(c.getNit()));
+            ps.setString(5, nullIfBlank(c.getTelefono()));
+            ps.setString(6, nullIfBlank(c.getEmail()));
+            ps.setBoolean(7, c.isActivo());
+            ps.setString(8, c.getEstado());
+            ps.executeUpdate();
+            try (ResultSet keys = ps.getGeneratedKeys()) { if (keys.next()) c.setId(keys.getInt(1)); }
         }
-        return clientes;
     }
 
-    // --- Helper ---
+    public void actualizar(Cliente c) throws SQLException {
+        String sql = """
+            UPDATE dbo.Clientes
+            SET Codigo=?, Nombres=?, Apellidos=?, NIT=?, Telefono=?, Email=?, IsActive=?, Estado=?, BloqueadoHastaUtc=?
+            WHERE Id=?
+        """;
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setString(1, c.getCodigo());
+            ps.setString(2, c.getNombres());
+            ps.setString(3, c.getApellidos());
+            ps.setString(4, nullIfBlank(c.getNit()));
+            ps.setString(5, nullIfBlank(c.getTelefono()));
+            ps.setString(6, nullIfBlank(c.getEmail()));
+            ps.setBoolean(7, c.isActivo());
+            ps.setString(8, c.getEstado());
+            if (c.getBloqueadoHastaUtc() == null) ps.setNull(9, Types.TIMESTAMP);
+            else ps.setTimestamp(9, Timestamp.valueOf(c.getBloqueadoHastaUtc()));
+            ps.setInt(10, c.getId());
+            ps.executeUpdate();
+        }
+    }
 
-    /**
-     * Método helper para convertir un ResultSet en un objeto Cliente.
-     * (Igual que en MultaDAO).
-     */
-    private Cliente mapearResultSet(ResultSet rs) throws SQLException {
+    /** Baja lógica -> IsActive=0 */
+    public void eliminarLogico(int id) throws SQLException {
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement("UPDATE dbo.Clientes SET IsActive=0 WHERE Id=?")) {
+            ps.setInt(1, id);
+            ps.executeUpdate();
+        }
+    }
+
+    // ---------- Reglas rápidas ----------
+
+    public void bloquear(int idCliente, LocalDateTime hastaUtc) throws SQLException {
+        String sql = "UPDATE dbo.Clientes SET Estado='BLOQUEADO', BloqueadoHastaUtc=? WHERE Id=?";
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            if (hastaUtc == null) ps.setNull(1, Types.TIMESTAMP);
+            else ps.setTimestamp(1, Timestamp.valueOf(hastaUtc));
+            ps.setInt(2, idCliente);
+            ps.executeUpdate();
+        }
+    }
+
+    public void desbloquear(int idCliente) throws SQLException {
+        String sql = "UPDATE dbo.Clientes SET Estado='ACTIVO', BloqueadoHastaUtc=NULL WHERE Id=?";
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+            ps.setInt(1, idCliente);
+            ps.executeUpdate();
+        }
+    }
+
+    // ---------- Helpers ----------
+
+    private Cliente map(ResultSet rs) throws SQLException {
         Cliente c = new Cliente();
-        c.setIdCliente(rs.getInt("idCliente"));
-        c.setNombres(rs.getString("nombres"));
-        c.setApellidos(rs.getString("apellidos"));
-        c.setNit(rs.getString("nit"));
-        c.setTelefono(rs.getString("telefono"));
-        c.setEmail(rs.getString("email"));
-        c.setEstado(rs.getString("estado"));
-        c.setFechaRegistro(rs.getTimestamp("fechaRegistro"));
-        c.setEliminado(rs.getBoolean("eliminado"));
+        c.setId(rs.getInt("Id"));
+        c.setCodigo(rs.getString("Codigo"));
+        c.setNombres(rs.getString("Nombres"));
+        c.setApellidos(rs.getString("Apellidos"));
+        c.setNit(rs.getString("NIT"));
+        c.setTelefono(rs.getString("Telefono"));
+        c.setEmail(rs.getString("Email"));
+        c.setActivo(rs.getBoolean("IsActive"));
+        c.setEstado(rs.getString("Estado"));
+        Timestamp fr = rs.getTimestamp("FechaRegistroUtc");
+        if (fr != null) c.setFechaRegistroUtc(fr.toLocalDateTime());
+        Timestamp bh = rs.getTimestamp("BloqueadoHastaUtc");
+        if (bh != null) c.setBloqueadoHastaUtc(bh.toLocalDateTime());
         return c;
     }
+
+    private String nullIfBlank(String s) { return (s == null || s.isBlank()) ? null : s.trim(); }
 }

@@ -1,4 +1,4 @@
-package app.controller;
+package app.core;
 
 import app.dao.UsuarioDAO;
 import app.model.Usuario;
@@ -44,14 +44,13 @@ public class LoginController {
             Usuario usuario = usuarioDAO.autenticar(username, password);
 
             if (usuario != null) {
+                String rol = usuario.getRolPrincipal() != null ? " - " + usuario.getRolPrincipal() : "";
                 JOptionPane.showMessageDialog(vista,
-                        "Bienvenido, " + usuario.getNombreCompleto() + "!",
+                        "Bienvenido, " + usuario.getNombreCompleto() + rol + "!",
                         "Acceso permitido",
                         JOptionPane.INFORMATION_MESSAGE);
-
                 vista.dispose();
                 new MainMenuForm(usuario).setVisible(true);
-
             } else {
                 JOptionPane.showMessageDialog(vista,
                         "Usuario o contraseña incorrectos.",

@@ -8,269 +8,305 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
 import java.util.List;
 
-/**
- * Formulario para la Gestión de Clientes (Módulo C).
- * Sigue la estructura del ejemplo AutorForm.
- */
 public class ClienteForm extends JFrame {
 
-    // 1. Instancia del DAO
-    private ClienteDAO clienteDAO = new ClienteDAO();
+    private final ClienteDAO dao = new ClienteDAO();
 
-    // 2. Componentes de UI
-    private JTextField txtId, txtNombres, txtApellidos, txtNit, txtTelefono, txtEmail;
-    private JComboBox<String> cboEstado;
-    private JButton btnNuevo, btnGuardar, btnEditar, btnEliminar, btnCerrar;
-    private JTable tablaClientes;
+    private JTextField txtId, txtCodigo, txtNombres, txtApellidos, txtNit, txtTelefono, txtEmail;
+    private JCheckBox chkActivo;
+    private JComboBox<String> cboEstado; // ACTIVO / BLOQUEADO
+    private JSpinner spBloqueadoHasta;   // fecha/hora opcional
+
+    private JButton btnNuevo, btnGuardar, btnEditar, btnEliminar, btnBloquear, btnDesbloquear, btnCerrar, btnRefrescar;
+    private JTable tabla;
     private DefaultTableModel modelo;
 
-    // 3. Estado
     private boolean modoEdicion = false;
 
     public ClienteForm() {
         setTitle("Gestión de Clientes / Lectores");
-        // Ajustamos el tamaño para que quepan los nuevos campos
-        setSize(800, 600);
+        setSize(960, 640);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout(10, 10));
 
-        // ===== Panel de datos =====
-        // Aumentamos las filas del GridLayout para los campos del Cliente
-        JPanel panelDatos = new JPanel(new GridLayout(7, 2, 5, 5));
-        panelDatos.setBorder(BorderFactory.createTitledBorder("Datos del Cliente"));
+        initUI();
+        cargarTabla();
+        limpiar();
+    }
 
-        panelDatos.add(new JLabel("ID:"));
-        txtId = new JTextField();
-        txtId.setEnabled(false); // El ID no se edita
-        panelDatos.add(txtId);
+    private void initUI() {
+        JPanel datos = new JPanel(new GridLayout(6, 4, 8, 8));
+        datos.setBorder(BorderFactory.createTitledBorder("Datos del Cliente"));
 
-        panelDatos.add(new JLabel("Nombres:"));
+        txtId = new JTextField(); txtId.setEnabled(false);
+        txtCodigo = new JTextField();
         txtNombres = new JTextField();
-        panelDatos.add(txtNombres);
-
-        panelDatos.add(new JLabel("Apellidos:"));
         txtApellidos = new JTextField();
-        panelDatos.add(txtApellidos);
-
-        panelDatos.add(new JLabel("NIT (Opcional):"));
         txtNit = new JTextField();
-        panelDatos.add(txtNit);
-
-        panelDatos.add(new JLabel("Teléfono (Opcional):"));
         txtTelefono = new JTextField();
-        panelDatos.add(txtTelefono);
-
-        panelDatos.add(new JLabel("Email:"));
         txtEmail = new JTextField();
-        panelDatos.add(txtEmail);
 
-        panelDatos.add(new JLabel("Estado:"));
-        cboEstado = new JComboBox<>(new String[]{"Activo", "Bloqueado"});
-        panelDatos.add(cboEstado);
+        chkActivo = new JCheckBox("Activo", true);
+        cboEstado = new JComboBox<>(new String[]{"ACTIVO", "BLOQUEADO"});
+        spBloqueadoHasta = new JSpinner(new SpinnerDateModel());
+        JSpinner.DateEditor editor = new JSpinner.DateEditor(spBloqueadoHasta, "yyyy-MM-dd HH:mm");
+        spBloqueadoHasta.setEditor(editor);
 
-        add(panelDatos, BorderLayout.NORTH);
+        datos.add(new JLabel("ID:"));                datos.add(txtId);
+        datos.add(new JLabel("Código: *"));          datos.add(txtCodigo);
 
-        // ===== Tabla =====
-        // Ajustamos las columnas de la tabla al modelo Cliente
-        String[] columnas = {"ID", "Nombres", "Apellidos", "Email", "Teléfono", "NIT", "Estado"};
-        modelo = new DefaultTableModel(columnas, 0) {
-            // Hacemos que la tabla no sea editable directamente
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
+        datos.add(new JLabel("Nombres: *"));         datos.add(txtNombres);
+        datos.add(new JLabel("Apellidos: *"));       datos.add(txtApellidos);
+
+        datos.add(new JLabel("NIT (opc.):"));        datos.add(txtNit);
+        datos.add(new JLabel("Teléfono (opc.):"));   datos.add(txtTelefono);
+
+        datos.add(new JLabel("Email: *"));           datos.add(txtEmail);
+        datos.add(new JLabel("IsActive:"));          datos.add(chkActivo);
+
+        datos.add(new JLabel("Estado:"));            datos.add(cboEstado);
+        datos.add(new JLabel("Bloqueado hasta:"));   datos.add(spBloqueadoHasta);
+
+        add(datos, BorderLayout.NORTH);
+
+        // Tabla
+        String[] cols = {"ID", "Código", "Nombres", "Apellidos", "Email", "Teléfono", "NIT", "Activo", "Estado", "BloqueadoHasta"};
+        modelo = new DefaultTableModel(cols, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
         };
-        tablaClientes = new JTable(modelo);
-        add(new JScrollPane(tablaClientes), BorderLayout.CENTER);
-
-        // ===== Botones (Idénticos al ejemplo) =====
-        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
-        btnNuevo = new JButton("Nuevo");
-        btnGuardar = new JButton("Guardar");
-        btnEditar = new JButton("Editar");
-        btnEliminar = new JButton("Eliminar");
-        btnCerrar = new JButton("Cerrar");
-        panelBotones.add(btnNuevo);
-        panelBotones.add(btnGuardar);
-        panelBotones.add(btnEditar);
-        panelBotones.add(btnEliminar);
-        panelBotones.add(btnCerrar);
-        add(panelBotones, BorderLayout.SOUTH);
-
-        // ===== Eventos =====
-        btnNuevo.addActionListener(e -> limpiarCampos());
-        btnGuardar.addActionListener(e -> guardarCliente());
-        // El botón Editar ahora se llama 'cargarSeleccionado'
-        btnEditar.addActionListener(e -> cargarSeleccionado());
-        btnEliminar.addActionListener(e -> eliminarCliente());
-        btnCerrar.addActionListener(e -> dispose()); // Cierra solo esta ventana
-
-        // Evento de doble clic en la tabla (idéntico al ejemplo)
-        tablaClientes.addMouseListener(new MouseAdapter() {
-            public void mouseClicked(MouseEvent evt) {
-                // Doble clic
-                if (evt.getClickCount() == 2) {
-                    cargarSeleccionado();
-                }
+        tabla = new JTable(modelo);
+        tabla.setRowHeight(22);
+        tabla.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) cargarSeleccionado();
             }
         });
 
-        // Carga inicial de datos
-        cargarTabla();
-        limpiarCampos(); // Inicia en modo "Nuevo"
+        add(new JScrollPane(tabla), BorderLayout.CENTER);
+
+        // Botones
+        JPanel acciones = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        btnNuevo = new JButton("Nuevo");
+        btnGuardar = new JButton("Guardar");
+        btnEditar = new JButton("Editar");
+        btnEliminar = new JButton("Desactivar");
+        btnBloquear = new JButton("Bloquear");
+        btnDesbloquear = new JButton("Desbloquear");
+        btnRefrescar = new JButton("Refrescar");
+        btnCerrar = new JButton("Cerrar");
+
+        acciones.add(btnNuevo);
+        acciones.add(btnGuardar);
+        acciones.add(btnEditar);
+        acciones.add(btnEliminar);
+        acciones.add(btnBloquear);
+        acciones.add(btnDesbloquear);
+        acciones.add(btnRefrescar);
+        acciones.add(btnCerrar);
+        add(acciones, BorderLayout.SOUTH);
+
+        // Eventos
+        btnNuevo.addActionListener(e -> limpiar());
+        btnGuardar.addActionListener(e -> guardar());
+        btnEditar.addActionListener(e -> cargarSeleccionado());
+        btnEliminar.addActionListener(e -> eliminar());
+        btnBloquear.addActionListener(e -> bloquear());
+        btnDesbloquear.addActionListener(e -> desbloquear());
+        btnRefrescar.addActionListener(e -> cargarTabla());
+        btnCerrar.addActionListener(e -> dispose());
     }
 
-    private void limpiarCampos() {
+    private void limpiar() {
         txtId.setText("");
+        txtCodigo.setText("");
         txtNombres.setText("");
         txtApellidos.setText("");
         txtNit.setText("");
         txtTelefono.setText("");
         txtEmail.setText("");
-        cboEstado.setSelectedItem("Activo");
-
-        txtNombres.requestFocus(); // Pone el foco en el primer campo
+        chkActivo.setSelected(true);
+        cboEstado.setSelectedItem("ACTIVO");
+        spBloqueadoHasta.setValue(new Date());
         modoEdicion = false;
-
-        // Habilitar/deshabilitar botones
-        btnGuardar.setEnabled(true);
-        btnEditar.setEnabled(true);
-        btnEliminar.setEnabled(true);
+        txtCodigo.requestFocus();
     }
 
     private void cargarTabla() {
         try {
-            modelo.setRowCount(0); // Limpia la tabla
-            // Usamos el método del DAO
-            List<Cliente> lista = clienteDAO.listarClientesActivos();
-
+            modelo.setRowCount(0);
+            List<Cliente> lista = dao.listarTodos();
             for (Cliente c : lista) {
-                // Añadimos las columnas en el orden definido
                 modelo.addRow(new Object[]{
-                        c.getIdCliente(),
+                        c.getId(),
+                        c.getCodigo(),
                         c.getNombres(),
                         c.getApellidos(),
                         c.getEmail(),
                         c.getTelefono(),
                         c.getNit(),
-                        c.getEstado() // "Activo" o "Bloqueado"
+                        c.isActivo() ? "Sí" : "No",
+                        c.getEstado(),
+                        c.getBloqueadoHastaUtc()
                 });
             }
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Error al cargar clientes: " + ex.getMessage(),
-                    "Error de Base de Datos", JOptionPane.ERROR_MESSAGE);
-            ex.printStackTrace();
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error inesperado: " + ex.getMessage(),
+            JOptionPane.showMessageDialog(this, "Error al cargar clientes: " + ex.getMessage(),
                     "Error", JOptionPane.ERROR_MESSAGE);
-            ex.printStackTrace();
         }
     }
 
-    private void guardarCliente() {
-        // 1. Validaciones
-        String nombres = txtNombres.getText().trim();
-        String apellidos = txtApellidos.getText().trim();
-        String email = txtEmail.getText().trim();
-
-        if (nombres.isEmpty() || apellidos.isEmpty() || email.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Nombres, Apellidos y Email son obligatorios.",
+    private void guardar() {
+        // Validaciones
+        if (txtCodigo.getText().trim().isEmpty() ||
+                txtNombres.getText().trim().isEmpty() ||
+                txtApellidos.getText().trim().isEmpty() ||
+                txtEmail.getText().trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Campos obligatorios: Código, Nombres, Apellidos, Email",
                     "Validación", JOptionPane.WARNING_MESSAGE);
-            txtNombres.requestFocus();
             return;
         }
 
-        // 2. Crear el objeto Cliente
-        Cliente c = new Cliente();
-        c.setNombres(nombres);
-        c.setApellidos(apellidos);
-        c.setEmail(email);
-        c.setNit(txtNit.getText().trim());
-        c.setTelefono(txtTelefono.getText().trim());
-        c.setEstado(cboEstado.getSelectedItem().toString());
-        // La fecha de registro y 'eliminado' se manejan en el DAO/BD
-
         try {
+            Cliente c = new Cliente();
+            c.setCodigo(txtCodigo.getText().trim());
+            c.setNombres(txtNombres.getText().trim());
+            c.setApellidos(txtApellidos.getText().trim());
+            c.setNit(blankToNull(txtNit.getText()));
+            c.setTelefono(blankToNull(txtTelefono.getText()));
+            c.setEmail(txtEmail.getText().trim());
+            c.setActivo(chkActivo.isSelected());
+            c.setEstado(cboEstado.getSelectedItem().toString());
+
+            Date d = (Date) spBloqueadoHasta.getValue();
+            LocalDateTime hasta = d == null ? null :
+                    LocalDateTime.ofInstant(d.toInstant(), ZoneId.systemDefault());
+            c.setBloqueadoHastaUtc(hasta);
+
             if (modoEdicion) {
-                // 3a. Actualizar (Modo Edición)
-                c.setIdCliente(Integer.parseInt(txtId.getText()));
-                clienteDAO.actualizarCliente(c);
+                c.setId(Integer.parseInt(txtId.getText()));
+                dao.actualizar(c);
                 JOptionPane.showMessageDialog(this, "Cliente actualizado correctamente.");
             } else {
-                // 3b. Registrar (Modo Nuevo)
-                clienteDAO.registrarCliente(c);
-                JOptionPane.showMessageDialog(this, "Cliente registrado correctamente.");
+                // unicidad de código
+                if (dao.existeCodigo(c.getCodigo())) {
+                    JOptionPane.showMessageDialog(this, "El código ya existe. Use uno diferente.", "Validación", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                dao.crear(c);
+                JOptionPane.showMessageDialog(this, "Cliente registrado correctamente. ID=" + c.getId());
+                modoEdicion = true;
+                txtId.setText(String.valueOf(c.getId()));
             }
-
-            // 4. Refrescar
-            limpiarCampos();
             cargarTabla();
 
-        } catch (SQLException ex) {
+        } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Error al guardar cliente: " + ex.getMessage(),
-                    "Error de Base de Datos", JOptionPane.ERROR_MESSAGE);
-            ex.printStackTrace();
-        } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this, "Error: ID inválido.",
-                    "Error de Formato", JOptionPane.ERROR_MESSAGE);
+                    "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void cargarSeleccionado() {
-        int fila = tablaClientes.getSelectedRow();
-        if (fila == -1) {
-            JOptionPane.showMessageDialog(this, "Seleccione un cliente de la tabla.",
-                    "Aviso", JOptionPane.INFORMATION_MESSAGE);
+        int row = tabla.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this, "Selecciona un cliente en la tabla.", "Aviso", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
+        try {
+            int id = (int) modelo.getValueAt(row, 0);
+            Cliente c = dao.buscarPorId(id);
+            if (c == null) { JOptionPane.showMessageDialog(this, "Cliente no encontrado."); return; }
 
-        // Cargamos los datos desde el modelo de la tabla
-        txtId.setText(modelo.getValueAt(fila, 0).toString());
-        txtNombres.setText(modelo.getValueAt(fila, 1).toString());
-        txtApellidos.setText(modelo.getValueAt(fila, 2).toString());
-        txtEmail.setText(modelo.getValueAt(fila, 3).toString());
-        txtTelefono.setText(modelo.getValueAt(fila, 4).toString());
-        txtNit.setText(modelo.getValueAt(fila, 5).toString());
-        cboEstado.setSelectedItem(modelo.getValueAt(fila, 6).toString());
+            txtId.setText(String.valueOf(c.getId()));
+            txtCodigo.setText(c.getCodigo());
+            txtNombres.setText(c.getNombres());
+            txtApellidos.setText(c.getApellidos());
+            txtNit.setText(nullToBlank(c.getNit()));
+            txtTelefono.setText(nullToBlank(c.getTelefono()));
+            txtEmail.setText(nullToBlank(c.getEmail()));
+            chkActivo.setSelected(c.isActivo());
+            cboEstado.setSelectedItem(c.getEstado() == null ? "ACTIVO" : c.getEstado());
 
-        modoEdicion = true;
+            Date d = c.getBloqueadoHastaUtc() == null ? new Date()
+                    : Date.from(c.getBloqueadoHastaUtc().atZone(ZoneId.systemDefault()).toInstant());
+            spBloqueadoHasta.setValue(d);
 
-        // Deshabilitar botones para evitar clics accidentales
-        btnEditar.setEnabled(false);
-        btnEliminar.setEnabled(false);
+            modoEdicion = true;
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error al cargar cliente: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
-    private void eliminarCliente() {
-        int fila = tablaClientes.getSelectedRow();
-        if (fila == -1) {
-            JOptionPane.showMessageDialog(this, "Seleccione un cliente para eliminar.",
-                    "Aviso", JOptionPane.INFORMATION_MESSAGE);
+    private void eliminar() {
+        int row = tabla.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this, "Selecciona un cliente.", "Aviso", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-
-        int id = Integer.parseInt(modelo.getValueAt(fila, 0).toString());
-
-        // Confirmación (Req. 89)
-        int resp = JOptionPane.showConfirmDialog(this,
-                "¿Está seguro de eliminar (baja lógica) a este cliente?",
-                "Confirmar Eliminación", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-
-        if (resp == JOptionPane.YES_OPTION) {
+        int id = (int) modelo.getValueAt(row, 0);
+        int op = JOptionPane.showConfirmDialog(this, "¿Desactivar este cliente (IsActive=0)?",
+                "Confirmar", JOptionPane.YES_NO_OPTION);
+        if (op == JOptionPane.YES_OPTION) {
             try {
-                // Usamos el método de eliminación lógica del DAO
-                clienteDAO.eliminarCliente(id);
-                JOptionPane.showMessageDialog(this, "Cliente eliminado (baja lógica) correctamente.");
+                dao.eliminarLogico(id);
+                JOptionPane.showMessageDialog(this, "Cliente desactivado.");
                 cargarTabla();
-                limpiarCampos();
-            } catch (SQLException ex) {
-                JOptionPane.showMessageDialog(this, "Error al eliminar cliente: " + ex.getMessage(),
-                        "Error de Base de Datos", JOptionPane.ERROR_MESSAGE);
-                ex.printStackTrace();
+                limpiar();
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Error al desactivar: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
+    }
+
+    private void bloquear() {
+        int row = tabla.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this, "Selecciona un cliente para bloquear.", "Aviso", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        try {
+            int id = (int) modelo.getValueAt(row, 0);
+            Date d = (Date) spBloqueadoHasta.getValue();
+            LocalDateTime hasta = d == null ? null :
+                    LocalDateTime.ofInstant(d.toInstant(), ZoneId.systemDefault());
+            dao.bloquear(id, hasta);
+            JOptionPane.showMessageDialog(this, "Cliente bloqueado.");
+            cargarTabla();
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error al bloquear: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void desbloquear() {
+        int row = tabla.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this, "Selecciona un cliente para desbloquear.", "Aviso", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        try {
+            int id = (int) modelo.getValueAt(row, 0);
+            dao.desbloquear(id);
+            JOptionPane.showMessageDialog(this, "Cliente desbloqueado.");
+            cargarTabla();
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error al desbloquear: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private String blankToNull(String s) { return (s == null || s.isBlank()) ? null : s.trim(); }
+    private String nullToBlank(String s) { return s == null ? "" : s; }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new ClienteForm().setVisible(true));
     }
 }

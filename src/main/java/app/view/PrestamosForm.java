@@ -1,6 +1,8 @@
 package app.view;
 
 import app.dao.PrestamosDAO;
+import app.dao.PrestamosDAO.ClienteMin;
+import app.dao.PrestamosDAO.LibroDisp;
 import app.model.Prestamos;
 
 import javax.swing.*;
@@ -9,26 +11,32 @@ import java.awt.*;
 import java.sql.SQLException;
 import java.util.List;
 
+/**
+ * Préstamos y Devoluciones (sin código de barras)
+ * - Selección de Cliente y Libro.
+ * - El DAO elige internamente una copia DISPONIBLE para el libro.
+ */
 public class PrestamosForm extends JFrame {
 
     private final PrestamosDAO dao = new PrestamosDAO();
 
-    private JTextField txtCodigoCliente;
-    private JTextField txtCodigoBarra;
-    private JLabel lblTituloLibro;
-    private JLabel lblEstadoCopia;
+    // Controles
+    private JComboBox<ComboItemCliente> cboCliente;
+    private JComboBox<ComboItemLibro> cboLibro;
+    private JLabel lblDisponibles;
     private JTable tblPrestamos;
     private DefaultTableModel modelo;
 
-    // Cambia por el usuario que tengas autenticado en tu app
+    // Usuario autenticado
     private String usuarioActual = "admin";
 
     public PrestamosForm() {
         setTitle("Préstamos y Devoluciones");
-        setSize(900, 600);
+        setSize(900, 620);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         initUI();
+        cargarCombos();
     }
 
     private void initUI() {
@@ -36,17 +44,17 @@ public class PrestamosForm extends JFrame {
         GridBagConstraints g = new GridBagConstraints();
         g.insets = new Insets(6,6,6,6);
         g.fill = GridBagConstraints.HORIZONTAL;
+        int col;
 
-        txtCodigoCliente = new JTextField(12);
-        txtCodigoBarra = new JTextField(12);
-        lblTituloLibro = new JLabel("-");
-        lblEstadoCopia = new JLabel("-");
+        cboCliente = new JComboBox<>();
+        cboLibro   = new JComboBox<>();
+        lblDisponibles = new JLabel("-");
 
-        JButton btnBuscarLibro = new JButton("Ver título/estado");
-        btnBuscarLibro.addActionListener(e -> onVerLibro());
-
-        JButton btnRefrescar = new JButton("Refrescar préstamos");
+        JButton btnRefrescar = new JButton("Ver préstamos del cliente");
         btnRefrescar.addActionListener(e -> onRefrescar());
+
+        JButton btnVerDisp = new JButton("Disponibles del libro");
+        btnVerDisp.addActionListener(e -> onVerDisponibles());
 
         JButton btnPrestar = new JButton("Prestar");
         btnPrestar.addActionListener(e -> onPrestar());
@@ -57,24 +65,22 @@ public class PrestamosForm extends JFrame {
         JButton btnDevolver = new JButton("Devolver");
         btnDevolver.addActionListener(e -> onDevolver());
 
-        int col = 0;
-        g.gridx = col++; g.gridy = 0; top.add(new JLabel("Código Cliente:"), g);
-        g.gridx = col++; top.add(txtCodigoCliente, g);
+        // Fila 1: Cliente
+        col = 0;
+        g.gridx = col++; g.gridy = 0; top.add(new JLabel("Cliente:"), g);
+        g.gridx = col++; top.add(cboCliente, g);
         g.gridx = col++; top.add(btnRefrescar, g);
 
+        // Fila 2: Libro
         col = 0;
-        g.gridx = col++; g.gridy = 1; top.add(new JLabel("Código de Barra:"), g);
-        g.gridx = col++; top.add(txtCodigoBarra, g);
-        g.gridx = col++; top.add(btnBuscarLibro, g);
+        g.gridx = col++; g.gridy = 1; top.add(new JLabel("Libro:"), g);
+        g.gridx = col++; top.add(cboLibro, g);
+        g.gridx = col++; top.add(btnVerDisp, g);
 
+        // Fila 3: Disponibles
         col = 0;
-        g.gridx = col++; g.gridy = 2; top.add(new JLabel("Título:"), g);
-        g.gridx = col++; g.gridwidth = 2; top.add(lblTituloLibro, g);
-        g.gridwidth = 1;
-
-        col = 0;
-        g.gridx = col++; g.gridy = 3; top.add(new JLabel("Estado copia:"), g);
-        g.gridx = col++; g.gridwidth = 2; top.add(lblEstadoCopia, g);
+        g.gridx = col++; g.gridy = 2; top.add(new JLabel("Copias disponibles:"), g);
+        g.gridx = col++; g.gridwidth = 2; top.add(lblDisponibles, g);
         g.gridwidth = 1;
 
         JPanel acciones = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -90,44 +96,63 @@ public class PrestamosForm extends JFrame {
         };
         tblPrestamos = new JTable(modelo);
         JScrollPane sp = new JScrollPane(tblPrestamos);
+        sp.setPreferredSize(new Dimension(880, 360));
 
         setLayout(new BorderLayout());
         add(top, BorderLayout.NORTH);
         add(acciones, BorderLayout.CENTER);
         add(sp, BorderLayout.SOUTH);
-
-        // Altura de la tabla
-        sp.setPreferredSize(new Dimension(880, 350));
     }
 
-    private void onVerLibro() {
-        String cb = txtCodigoBarra.getText().trim();
-        if (cb.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Ingresa el código de barra.");
-            return;
-        }
+    private void cargarCombos() {
         try {
-            String titulo = dao.getTituloPorCodigoBarra(cb);
-            String estado = dao.getEstadoCopia(cb);
-            lblTituloLibro.setText(titulo != null ? titulo : "(no encontrado)");
-            lblEstadoCopia.setText(estado != null ? estado : "(no encontrado)");
+            // Clientes
+            cboCliente.removeAllItems();
+            List<ClienteMin> clientes = dao.listarClientesActivosMin();
+            for (ClienteMin c : clientes) {
+                cboCliente.addItem(new ComboItemCliente(c.id, c.codigo, c.nombreCompleto));
+            }
+            // Libros
+            cboLibro.removeAllItems();
+            List<LibroDisp> libros = dao.listarLibrosConDisponibles();
+            for (LibroDisp l : libros) {
+                cboLibro.addItem(new ComboItemLibro(l.idLibro, l.titulo, l.disponibles));
+            }
+            // Disponibles del libro seleccionado
+            onVerDisponibles();
+        } catch (SQLException ex) {
+            PrestamosDAO.showError(this, ex);
+        }
+    }
+
+    private Integer getClienteSeleccionadoId() {
+        ComboItemCliente it = (ComboItemCliente) cboCliente.getSelectedItem();
+        return it == null ? null : it.id;
+    }
+
+    private Integer getLibroSeleccionadoId() {
+        ComboItemLibro it = (ComboItemLibro) cboLibro.getSelectedItem();
+        return it == null ? null : it.idLibro;
+    }
+
+    private void onVerDisponibles() {
+        Integer idLibro = getLibroSeleccionadoId();
+        if (idLibro == null) { lblDisponibles.setText("-"); return; }
+        try {
+            int cant = dao.contarDisponiblesPorLibro(idLibro);
+            lblDisponibles.setText(String.valueOf(cant));
         } catch (SQLException ex) {
             PrestamosDAO.showError(this, ex);
         }
     }
 
     private void onRefrescar() {
-        String cod = txtCodigoCliente.getText().trim();
-        if (cod.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Ingresa el código del cliente.");
+        Integer idCliente = getClienteSeleccionadoId();
+        if (idCliente == null) {
+            JOptionPane.showMessageDialog(this, "Seleccione un cliente.");
             return;
         }
         try {
-            Integer idCliente = dao.getIdClienteByCodigo(cod);
-            if (idCliente == null) {
-                JOptionPane.showMessageDialog(this, "Cliente no encontrado o inactivo.");
-                return;
-            }
             List<Prestamos> lista = dao.listarPrestamosActivosPorCliente(idCliente);
             modelo.setRowCount(0);
             for (Prestamos p : lista) {
@@ -147,23 +172,17 @@ public class PrestamosForm extends JFrame {
     }
 
     private void onPrestar() {
-        String codCliente = txtCodigoCliente.getText().trim();
-        String cb = txtCodigoBarra.getText().trim();
-        if (codCliente.isEmpty() || cb.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Ingresa código de cliente y código de barra.");
+        Integer idCliente = getClienteSeleccionadoId();
+        Integer idLibro = getLibroSeleccionadoId();
+        if (idCliente == null || idLibro == null) {
+            JOptionPane.showMessageDialog(this, "Seleccione cliente y libro.");
             return;
         }
         try {
-            Integer idCliente = dao.getIdClienteByCodigo(codCliente);
-            if (idCliente == null) { JOptionPane.showMessageDialog(this, "Cliente no encontrado."); return; }
-
-            Integer idCopia = dao.getIdCopiaByCodigoBarra(cb);
-            if (idCopia == null) { JOptionPane.showMessageDialog(this, "Copia no encontrada."); return; }
-
-            int idPrestamo = dao.crearPrestamo(idCliente, idCopia, usuarioActual);
+            int idPrestamo = dao.crearPrestamoPorLibro(idCliente, idLibro, usuarioActual);
             JOptionPane.showMessageDialog(this, "Préstamo creado. Id=" + idPrestamo);
             onRefrescar();
-            onVerLibro();
+            onVerDisponibles();
         } catch (SQLException ex) {
             PrestamosDAO.showError(this, ex);
         }
@@ -183,24 +202,38 @@ public class PrestamosForm extends JFrame {
     }
 
     private void onDevolver() {
-        String cb = txtCodigoBarra.getText().trim();
-        if (cb.isEmpty()) { JOptionPane.showMessageDialog(this, "Ingresa el código de barra."); return; }
+        int row = tblPrestamos.getSelectedRow();
+        if (row < 0) { JOptionPane.showMessageDialog(this, "Selecciona un préstamo en la tabla."); return; }
+        int idPrestamo = (int) modelo.getValueAt(row, 0);
         try {
-            Integer idPrestamo = dao.getIdPrestamoActivoPorCodigoBarra(cb);
-            if (idPrestamo == null) {
-                JOptionPane.showMessageDialog(this, "No existe préstamo activo para esa copia.");
-                return;
-            }
             dao.devolverPrestamo(idPrestamo, usuarioActual);
             JOptionPane.showMessageDialog(this, "Devolución registrada.");
             onRefrescar();
-            onVerLibro();
+            onVerDisponibles();
         } catch (SQLException ex) {
             PrestamosDAO.showError(this, ex);
         }
     }
 
-    // Para probar el form solo:
+    // ====== Helpers para combos ======
+
+    private static class ComboItemCliente {
+        final int id; final String codigo; final String nombre;
+        ComboItemCliente(int id, String codigo, String nombre) {
+            this.id = id; this.codigo = codigo; this.nombre = nombre;
+        }
+        @Override public String toString() { return codigo + " - " + nombre; }
+    }
+
+    private static class ComboItemLibro {
+        final int idLibro; final String titulo; final int disponibles;
+        ComboItemLibro(int idLibro, String titulo, int disponibles) {
+            this.idLibro = idLibro; this.titulo = titulo; this.disponibles = disponibles;
+        }
+        @Override public String toString() { return titulo + "  [" + disponibles + "]"; }
+    }
+
+    // Para probar el form
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new PrestamosForm().setVisible(true));
     }

@@ -4,26 +4,16 @@ import app.db.Conexion;
 import app.model.Prestamos;
 
 import javax.swing.*;
-import java.sql.*;
 import java.awt.Component;
-import java.time.LocalDateTime;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * DAO para gestionar Préstamos, Renovaciones y Devoluciones.
- * Usa SP:
- *  - sp_Prestamo_Crear(@IdCliente, @IdCopia, @UsuarioEjecuta)
- *  - sp_Prestamo_Renovar(@IdPrestamo, @UsuarioEjecuta)
- *  - sp_Prestamo_Devolver(@IdPrestamo, @UsuarioEjecuta)
- * Y la vista:
- *  - vw_PrestamosActivosPorCliente
- */
 public class PrestamosDAO {
 
-    // -------- utilidades de resolución ----------------
+    // ====== UTILIDADES DE RESOLUCIÓN ======
 
-    /** Devuelve IdCliente por su "Codigo" (matrícula/carnet) */
+    /** Devuelve IdCliente por su "Codigo" (carnet) */
     public Integer getIdClienteByCodigo(String codigo) throws SQLException {
         final String sql = "SELECT Id FROM dbo.Clientes WHERE Codigo = ? AND IsActive = 1";
         try (Connection c = Conexion.getConnection();
@@ -35,7 +25,7 @@ public class PrestamosDAO {
         }
     }
 
-    /** Devuelve IdCopia por su Código de barras si está activa (no inactiva/extraviada/deteriorada) */
+    /** Devuelve IdCopia por su código de barras (si existiera flujo con CB) */
     public Integer getIdCopiaByCodigoBarra(String codigoBarra) throws SQLException {
         final String sql = "SELECT Id FROM dbo.Copias WHERE CodigoBarra = ? AND IsActive = 1 AND Estado IN ('DISPONIBLE','RESERVADA','PRESTADA')";
         try (Connection c = Conexion.getConnection();
@@ -59,9 +49,98 @@ public class PrestamosDAO {
         }
     }
 
-    // -------- operaciones principales -----------------
+    // ====== LISTADOS PARA COMBOS ======
 
-    /** Crea un préstamo (valida con SP). Devuelve el Id del préstamo creado. */
+    /** Lista clientes activos (Id, Codigo, NombreCompleto) */
+    public List<ClienteMin> listarClientesActivosMin() throws SQLException {
+        final String sql = """
+            SELECT Id, Codigo, (RTRIM(LTRIM(Nombres)) + ' ' + RTRIM(LTRIM(Apellidos))) AS Nombre
+            FROM dbo.Clientes
+            WHERE IsActive = 1
+            ORDER BY Apellidos, Nombres
+        """;
+        List<ClienteMin> res = new ArrayList<>();
+        try (Connection c = Conexion.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                res.add(new ClienteMin(
+                        rs.getInt("Id"),
+                        rs.getString("Codigo"),
+                        rs.getString("Nombre")
+                ));
+            }
+        }
+        return res;
+    }
+
+    /** Lista libros con cantidad de copias disponibles */
+    public List<LibroDisp> listarLibrosConDisponibles() throws SQLException {
+        final String sql = """
+            SELECT l.Id, l.Titulo, ISNULL(disp.Cant, 0) AS Disponibles
+            FROM dbo.Libros l
+            OUTER APPLY (
+                SELECT COUNT(*) AS Cant
+                FROM dbo.Copias c
+                WHERE c.IdLibro = l.Id
+                  AND c.IsActive = 1
+                  AND c.Estado = 'DISPONIBLE'
+            ) disp
+            ORDER BY l.Titulo
+        """;
+        List<LibroDisp> res = new ArrayList<>();
+        try (Connection c = Conexion.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                res.add(new LibroDisp(
+                        rs.getInt("Id"),
+                        rs.getString("Titulo"),
+                        rs.getInt("Disponibles")
+                ));
+            }
+        }
+        return res;
+    }
+
+    /** Devuelve la primera copia disponible para un libro (o null) */
+    public Integer getPrimeraCopiaDisponible(int idLibro) throws SQLException {
+        final String sql = """
+            SELECT TOP 1 Id
+            FROM dbo.Copias
+            WHERE IdLibro = ?
+              AND IsActive = 1
+              AND Estado = 'DISPONIBLE'
+            ORDER BY Id
+        """;
+        try (Connection c = Conexion.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, idLibro);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : null;
+            }
+        }
+    }
+
+    /** Cantidad de copias disponibles por libro */
+    public int contarDisponiblesPorLibro(int idLibro) throws SQLException {
+        final String sql = """
+            SELECT COUNT(*) 
+            FROM dbo.Copias
+            WHERE IdLibro=? AND IsActive=1 AND Estado='DISPONIBLE'
+        """;
+        try (Connection c = Conexion.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, idLibro);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
+        }
+    }
+
+    // ====== OPERACIONES PRINCIPALES ======
+
+    /** Crea un préstamo (por copia). Devuelve el Id del préstamo creado. */
     public int crearPrestamo(int idCliente, int idCopia, String usuarioEjecuta) throws SQLException {
         try (Connection c = Conexion.getConnection();
              CallableStatement cs = c.prepareCall("{ call dbo.sp_Prestamo_Crear(?,?,?) }")) {
@@ -70,7 +149,6 @@ public class PrestamosDAO {
             cs.setString(3, usuarioEjecuta);
             cs.execute();
 
-            // El SP no devuelve ID; lo buscamos (último préstamo del cliente para esa copia)
             try (PreparedStatement ps = c.prepareStatement(
                     "SELECT TOP 1 Id FROM dbo.Prestamos WHERE IdCliente=? AND IdCopia=? ORDER BY Id DESC")) {
                 ps.setInt(1, idCliente);
@@ -81,6 +159,14 @@ public class PrestamosDAO {
             }
             throw new SQLException("No se pudo obtener el Id del préstamo recién creado.");
         }
+    }
+
+    /** Crea un préstamo por LIBRO: toma la primera copia disponible. */
+    public int crearPrestamoPorLibro(int idCliente, int idLibro, String usuarioEjecuta) throws SQLException {
+        Integer idCopia = getPrimeraCopiaDisponible(idLibro);
+        if (idCopia == null)
+            throw new SQLException("No hay copias DISPONIBLES para el libro seleccionado.");
+        return crearPrestamo(idCliente, idCopia, usuarioEjecuta);
     }
 
     /** Renueva préstamo si aplica (sin reservas pendientes). */
@@ -136,37 +222,28 @@ public class PrestamosDAO {
         return lista;
     }
 
-    // -------- helpers para UI -------------------------------------
+    // ====== HELPERS UI ======
 
-    public String getTituloPorCodigoBarra(String codigoBarra) throws SQLException {
-        final String sql = "SELECT l.Titulo FROM dbo.Copias c JOIN dbo.Libros l ON l.Id = c.IdLibro WHERE c.CodigoBarra = ?";
-        try (Connection c = Conexion.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, codigoBarra);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getString(1) : null;
-            }
-        }
-    }
-
-    public String getEstadoCopia(String codigoBarra) throws SQLException {
-        final String sql = "SELECT Estado FROM dbo.Copias WHERE CodigoBarra = ?";
-        try (Connection c = Conexion.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, codigoBarra);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getString(1) : null;
-            }
-        }
-    }
-
-    public Integer getIdPrestamoActivoPorCodigoBarra(String codigoBarra) throws SQLException {
-        Integer idCopia = getIdCopiaByCodigoBarra(codigoBarra);
-        return idCopia == null ? null : getPrestamoActivoByCopia(idCopia);
-    }
-
-    // Mensajería rápida
     public static void showError(Component parent, Exception ex) {
         JOptionPane.showMessageDialog(parent, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+    }
+
+    // ====== DTOs ligeros para combos ======
+    public static class ClienteMin {
+        public final int id;
+        public final String codigo;
+        public final String nombreCompleto;
+        public ClienteMin(int id, String codigo, String nombreCompleto) {
+            this.id = id; this.codigo = codigo; this.nombreCompleto = nombreCompleto;
+        }
+    }
+
+    public static class LibroDisp {
+        public final int idLibro;
+        public final String titulo;
+        public final int disponibles;
+        public LibroDisp(int idLibro, String titulo, int disponibles) {
+            this.idLibro = idLibro; this.titulo = titulo; this.disponibles = disponibles;
+        }
     }
 }

@@ -10,11 +10,6 @@ import java.awt.event.ActionEvent;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-/**
- * MainMenuForm
- * Menú principal con diseño de "tiles" y permisos por rol.
- * Abre: AutorForm, LibroForm, PrestamosForm, UsuarioForm (si existe).
- */
 public class MainMenuForm extends JFrame {
 
     private final Usuario usuario;
@@ -36,12 +31,10 @@ public class MainMenuForm extends JFrame {
 
     private void initLaf() {
         try {
-            // Usa el L&F del sistema para verse nativo
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception ignore) {}
     }
 
-    // ====== Inicialización del menú ======
     private void inicializarComponentes() {
         setTitle("Menú Principal - " + (usuario.getNombreCompleto() != null ? usuario.getNombreCompleto() : usuario.getUsername()));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -123,22 +116,16 @@ public class MainMenuForm extends JFrame {
         b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         b.setPreferredSize(new Dimension(200, 120));
         b.setOpaque(true);
-        // hover
         b.addChangeListener(e -> {
-            if (b.getModel().isRollover()) {
-                b.setBackground(new Color(238, 242, 248));
-            } else {
-                b.setBackground(new Color(245, 247, 250));
-            }
+            if (b.getModel().isRollover()) b.setBackground(new Color(238, 242, 248));
+            else b.setBackground(new Color(245, 247, 250));
         });
         return b;
     }
 
-    // ====== Permisos por rol ======
     private void configurarPermisos() {
         String rol = (usuario.getRolPrincipal() != null ? usuario.getRolPrincipal() : "").trim().toUpperCase();
 
-        // Por defecto, deshabilitar todo excepto salir
         btnAutores.setEnabled(false);
         btnLibros.setEnabled(false);
         btnClientes.setEnabled(false);
@@ -153,72 +140,50 @@ public class MainMenuForm extends JFrame {
                 btnPrestamos.setEnabled(true);
                 btnUsuarios.setEnabled(true);
                 break;
-
             case "BIBLIOTECARIO":
                 btnAutores.setEnabled(true);
                 btnLibros.setEnabled(true);
                 btnClientes.setEnabled(true);
                 btnPrestamos.setEnabled(true);
-                // Usuarios no
                 break;
-
             case "FINANCIERO":
-                btnAutores.setEnabled(false);
-                btnLibros.setEnabled(true);    // consulta
-                btnClientes.setEnabled(true);  // consulta/caja si lo implementas
-                btnPrestamos.setEnabled(false);
-                // Usuarios no
+                btnLibros.setEnabled(true);
+                btnClientes.setEnabled(true);
                 break;
-
             case "CLIENTE":
-                btnAutores.setEnabled(true);   // lectura
-                btnLibros.setEnabled(true);    // lectura
-                // resto no
+                btnAutores.setEnabled(true);
+                btnLibros.setEnabled(true);
                 break;
-
             default:
-                // sin rol reconocido
-                btnAutores.setEnabled(true);   // lectura básica
+                btnAutores.setEnabled(true);
         }
     }
 
-    // ====== Eventos ======
     private void configurarEventos() {
         btnAutores.addActionListener((ActionEvent e) -> {
-            try {
-                new AutorForm().setVisible(true);
-            } catch (Throwable ex) {
-                showInfo("Módulo de Autores no disponible: " + ex.getMessage());
-            }
+            try { new AutorForm().setVisible(true); }
+            catch (Throwable ex) { showInfo("Módulo de Autores no disponible: " + ex.getMessage()); }
         });
 
         btnLibros.addActionListener(e -> {
-            try {
-                new LibroForm().setVisible(true);
-            } catch (Throwable ex) {
-                showError("No se pudo abrir Libros: " + ex.getMessage());
-            }
+            try { new LibroForm().setVisible(true); }
+            catch (Throwable ex) { showError("No se pudo abrir Libros: " + ex.getMessage()); }
         });
 
+        // >>> INTEGRACIÓN DEL MÓDULO DE CLIENTES <<<
         btnClientes.addActionListener(e -> {
-            // Si aún no tienes el form de clientes, deja un mensaje
-            showInfo("Módulo de Clientes aún no implementado.");
+            try { new ClienteForm().setVisible(true); }
+            catch (Throwable ex) { showError("No se pudo abrir Clientes: " + ex.getMessage()); }
         });
 
         btnPrestamos.addActionListener(e -> {
-            try {
-                new PrestamosForm().setVisible(true);
-            } catch (Throwable ex) {
-                showError("No se pudo abrir Préstamos: " + ex.getMessage());
-            }
+            try { new PrestamosForm().setVisible(true); }
+            catch (Throwable ex) { showError("No se pudo abrir Préstamos: " + ex.getMessage()); }
         });
 
         btnUsuarios.addActionListener(e -> {
-            try {
-                new UsuarioForm().setVisible(true);
-            } catch (Throwable ex) {
-                showError("No se pudo abrir Usuarios: " + ex.getMessage());
-            }
+            try { new UsuarioForm().setVisible(true); }
+            catch (Throwable ex) { showError("No se pudo abrir Usuarios: " + ex.getMessage()); }
         });
 
         btnSalir.addActionListener(e -> {
@@ -240,7 +205,6 @@ public class MainMenuForm extends JFrame {
         JOptionPane.showMessageDialog(this, msg, "Error", JOptionPane.ERROR_MESSAGE);
     }
 
-    // ====== Main de prueba ======
     public static void main(String[] args) {
         Usuario u = new Usuario();
         u.setId(1);

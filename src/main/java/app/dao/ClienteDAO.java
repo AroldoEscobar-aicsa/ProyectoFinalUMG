@@ -4,14 +4,12 @@ import app.db.Conexion;
 import app.model.Cliente;
 
 import java.sql.*;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ClienteDAO {
 
     // ---------- Utilidades ----------
-
     public boolean existeCodigo(String codigo) throws SQLException {
         String q = "SELECT 1 FROM dbo.Clientes WHERE Codigo = ?";
         try (Connection cn = Conexion.getConnection();
@@ -31,11 +29,9 @@ public class ClienteDAO {
     }
 
     // ---------- CRUD ----------
-
     public List<Cliente> listarTodos() throws SQLException {
         String sql = """
-            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado,
-                   FechaRegistroUtc, BloqueadoHastaUtc
+            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado
             FROM dbo.Clientes
             ORDER BY Apellidos, Nombres
         """;
@@ -50,8 +46,7 @@ public class ClienteDAO {
 
     public List<Cliente> listarActivos() throws SQLException {
         String sql = """
-            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado,
-                   FechaRegistroUtc, BloqueadoHastaUtc
+            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado
             FROM dbo.Clientes
             WHERE IsActive = 1
             ORDER BY Apellidos, Nombres
@@ -67,8 +62,7 @@ public class ClienteDAO {
 
     public Cliente buscarPorId(int id) throws SQLException {
         String sql = """
-            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado,
-                   FechaRegistroUtc, BloqueadoHastaUtc
+            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado
             FROM dbo.Clientes WHERE Id=?
         """;
         try (Connection cn = Conexion.getConnection();
@@ -80,8 +74,7 @@ public class ClienteDAO {
 
     public Cliente buscarPorCodigo(String codigo) throws SQLException {
         String sql = """
-            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado,
-                   FechaRegistroUtc, BloqueadoHastaUtc
+            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado
             FROM dbo.Clientes WHERE Codigo=?
         """;
         try (Connection cn = Conexion.getConnection();
@@ -91,11 +84,11 @@ public class ClienteDAO {
         }
     }
 
-    /** Inserta con FechaRegistroUtc = SYSUTCDATETIME(). */
+    /** Inserta sin columnas de fecha no existentes. */
     public void crear(Cliente c) throws SQLException {
         String sql = """
-            INSERT INTO dbo.Clientes (Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado, FechaRegistroUtc)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, SYSUTCDATETIME())
+            INSERT INTO dbo.Clientes (Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """;
         try (Connection cn = Conexion.getConnection();
              PreparedStatement ps = cn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -115,7 +108,7 @@ public class ClienteDAO {
     public void actualizar(Cliente c) throws SQLException {
         String sql = """
             UPDATE dbo.Clientes
-            SET Codigo=?, Nombres=?, Apellidos=?, NIT=?, Telefono=?, Email=?, IsActive=?, Estado=?, BloqueadoHastaUtc=?
+            SET Codigo=?, Nombres=?, Apellidos=?, NIT=?, Telefono=?, Email=?, IsActive=?, Estado=?
             WHERE Id=?
         """;
         try (Connection cn = Conexion.getConnection();
@@ -128,9 +121,7 @@ public class ClienteDAO {
             ps.setString(6, nullIfBlank(c.getEmail()));
             ps.setBoolean(7, c.isActivo());
             ps.setString(8, c.getEstado());
-            if (c.getBloqueadoHastaUtc() == null) ps.setNull(9, Types.TIMESTAMP);
-            else ps.setTimestamp(9, Timestamp.valueOf(c.getBloqueadoHastaUtc()));
-            ps.setInt(10, c.getId());
+            ps.setInt(9, c.getId());
             ps.executeUpdate();
         }
     }
@@ -144,30 +135,26 @@ public class ClienteDAO {
         }
     }
 
-    // ---------- Reglas rápidas ----------
-
-    public void bloquear(int idCliente, LocalDateTime hastaUtc) throws SQLException {
-        String sql = "UPDATE dbo.Clientes SET Estado='BLOQUEADO', BloqueadoHastaUtc=? WHERE Id=?";
+    // ---------- Reglas rápidas (sin fecha) ----------
+    /** Marca el cliente como BLOQUEADO (sin fecha tope). */
+    public void bloquear(int idCliente) throws SQLException {
         try (Connection cn = Conexion.getConnection();
-             PreparedStatement ps = cn.prepareStatement(sql)) {
-            if (hastaUtc == null) ps.setNull(1, Types.TIMESTAMP);
-            else ps.setTimestamp(1, Timestamp.valueOf(hastaUtc));
-            ps.setInt(2, idCliente);
+             PreparedStatement ps = cn.prepareStatement("UPDATE dbo.Clientes SET Estado='BLOQUEADO' WHERE Id=?")) {
+            ps.setInt(1, idCliente);
             ps.executeUpdate();
         }
     }
 
+    /** Marca el cliente como ACTIVO. */
     public void desbloquear(int idCliente) throws SQLException {
-        String sql = "UPDATE dbo.Clientes SET Estado='ACTIVO', BloqueadoHastaUtc=NULL WHERE Id=?";
         try (Connection cn = Conexion.getConnection();
-             PreparedStatement ps = cn.prepareStatement(sql)) {
+             PreparedStatement ps = cn.prepareStatement("UPDATE dbo.Clientes SET Estado='ACTIVO' WHERE Id=?")) {
             ps.setInt(1, idCliente);
             ps.executeUpdate();
         }
     }
 
     // ---------- Helpers ----------
-
     private Cliente map(ResultSet rs) throws SQLException {
         Cliente c = new Cliente();
         c.setId(rs.getInt("Id"));
@@ -179,10 +166,6 @@ public class ClienteDAO {
         c.setEmail(rs.getString("Email"));
         c.setActivo(rs.getBoolean("IsActive"));
         c.setEstado(rs.getString("Estado"));
-        Timestamp fr = rs.getTimestamp("FechaRegistroUtc");
-        if (fr != null) c.setFechaRegistroUtc(fr.toLocalDateTime());
-        Timestamp bh = rs.getTimestamp("BloqueadoHastaUtc");
-        if (bh != null) c.setBloqueadoHastaUtc(bh.toLocalDateTime());
         return c;
     }
 

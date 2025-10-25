@@ -8,9 +8,6 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.Date;
 import java.util.List;
 
 public class ClienteForm extends JFrame {
@@ -20,7 +17,6 @@ public class ClienteForm extends JFrame {
     private JTextField txtId, txtCodigo, txtNombres, txtApellidos, txtNit, txtTelefono, txtEmail;
     private JCheckBox chkActivo;
     private JComboBox<String> cboEstado; // ACTIVO / BLOQUEADO
-    private JSpinner spBloqueadoHasta;   // fecha/hora opcional
 
     private JButton btnNuevo, btnGuardar, btnEditar, btnEliminar, btnBloquear, btnDesbloquear, btnCerrar, btnRefrescar;
     private JTable tabla;
@@ -30,7 +26,7 @@ public class ClienteForm extends JFrame {
 
     public ClienteForm() {
         setTitle("Gestión de Clientes / Lectores");
-        setSize(960, 640);
+        setSize(900, 600);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout(10, 10));
@@ -41,7 +37,8 @@ public class ClienteForm extends JFrame {
     }
 
     private void initUI() {
-        JPanel datos = new JPanel(new GridLayout(6, 4, 8, 8));
+        // Panel de datos (sin spinner de bloqueo)
+        JPanel datos = new JPanel(new GridLayout(5, 4, 8, 8));
         datos.setBorder(BorderFactory.createTitledBorder("Datos del Cliente"));
 
         txtId = new JTextField(); txtId.setEnabled(false);
@@ -54,9 +51,6 @@ public class ClienteForm extends JFrame {
 
         chkActivo = new JCheckBox("Activo", true);
         cboEstado = new JComboBox<>(new String[]{"ACTIVO", "BLOQUEADO"});
-        spBloqueadoHasta = new JSpinner(new SpinnerDateModel());
-        JSpinner.DateEditor editor = new JSpinner.DateEditor(spBloqueadoHasta, "yyyy-MM-dd HH:mm");
-        spBloqueadoHasta.setEditor(editor);
 
         datos.add(new JLabel("ID:"));                datos.add(txtId);
         datos.add(new JLabel("Código: *"));          datos.add(txtCodigo);
@@ -71,12 +65,12 @@ public class ClienteForm extends JFrame {
         datos.add(new JLabel("IsActive:"));          datos.add(chkActivo);
 
         datos.add(new JLabel("Estado:"));            datos.add(cboEstado);
-        datos.add(new JLabel("Bloqueado hasta:"));   datos.add(spBloqueadoHasta);
+        datos.add(new JLabel());                     datos.add(new JLabel()); // espacio
 
         add(datos, BorderLayout.NORTH);
 
-        // Tabla
-        String[] cols = {"ID", "Código", "Nombres", "Apellidos", "Email", "Teléfono", "NIT", "Activo", "Estado", "BloqueadoHasta"};
+        // Tabla (sin columna de BloqueadoHasta)
+        String[] cols = {"ID", "Código", "Nombres", "Apellidos", "Email", "Teléfono", "NIT", "Activo", "Estado"};
         modelo = new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
@@ -87,7 +81,6 @@ public class ClienteForm extends JFrame {
                 if (e.getClickCount() == 2) cargarSeleccionado();
             }
         });
-
         add(new JScrollPane(tabla), BorderLayout.CENTER);
 
         // Botones
@@ -100,7 +93,6 @@ public class ClienteForm extends JFrame {
         btnDesbloquear = new JButton("Desbloquear");
         btnRefrescar = new JButton("Refrescar");
         btnCerrar = new JButton("Cerrar");
-
         acciones.add(btnNuevo);
         acciones.add(btnGuardar);
         acciones.add(btnEditar);
@@ -132,7 +124,6 @@ public class ClienteForm extends JFrame {
         txtEmail.setText("");
         chkActivo.setSelected(true);
         cboEstado.setSelectedItem("ACTIVO");
-        spBloqueadoHasta.setValue(new Date());
         modoEdicion = false;
         txtCodigo.requestFocus();
     }
@@ -151,8 +142,7 @@ public class ClienteForm extends JFrame {
                         c.getTelefono(),
                         c.getNit(),
                         c.isActivo() ? "Sí" : "No",
-                        c.getEstado(),
-                        c.getBloqueadoHastaUtc()
+                        c.getEstado()
                 });
             }
         } catch (Exception ex) {
@@ -162,12 +152,12 @@ public class ClienteForm extends JFrame {
     }
 
     private void guardar() {
-        // Validaciones
         if (txtCodigo.getText().trim().isEmpty() ||
                 txtNombres.getText().trim().isEmpty() ||
                 txtApellidos.getText().trim().isEmpty() ||
                 txtEmail.getText().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Campos obligatorios: Código, Nombres, Apellidos, Email",
+            JOptionPane.showMessageDialog(this,
+                    "Campos obligatorios: Código, Nombres, Apellidos, Email",
                     "Validación", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -183,23 +173,18 @@ public class ClienteForm extends JFrame {
             c.setActivo(chkActivo.isSelected());
             c.setEstado(cboEstado.getSelectedItem().toString());
 
-            Date d = (Date) spBloqueadoHasta.getValue();
-            LocalDateTime hasta = d == null ? null :
-                    LocalDateTime.ofInstant(d.toInstant(), ZoneId.systemDefault());
-            c.setBloqueadoHastaUtc(hasta);
-
             if (modoEdicion) {
                 c.setId(Integer.parseInt(txtId.getText()));
                 dao.actualizar(c);
                 JOptionPane.showMessageDialog(this, "Cliente actualizado correctamente.");
             } else {
-                // unicidad de código
                 if (dao.existeCodigo(c.getCodigo())) {
-                    JOptionPane.showMessageDialog(this, "El código ya existe. Use uno diferente.", "Validación", JOptionPane.WARNING_MESSAGE);
+                    JOptionPane.showMessageDialog(this, "El código ya existe. Use uno diferente.",
+                            "Validación", JOptionPane.WARNING_MESSAGE);
                     return;
                 }
                 dao.crear(c);
-                JOptionPane.showMessageDialog(this, "Cliente registrado correctamente. ID=" + c.getId());
+                JOptionPane.showMessageDialog(this, "Cliente registrado. ID=" + c.getId());
                 modoEdicion = true;
                 txtId.setText(String.valueOf(c.getId()));
             }
@@ -214,7 +199,8 @@ public class ClienteForm extends JFrame {
     private void cargarSeleccionado() {
         int row = tabla.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "Selecciona un cliente en la tabla.", "Aviso", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Selecciona un cliente en la tabla.",
+                    "Aviso", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         try {
@@ -232,10 +218,6 @@ public class ClienteForm extends JFrame {
             chkActivo.setSelected(c.isActivo());
             cboEstado.setSelectedItem(c.getEstado() == null ? "ACTIVO" : c.getEstado());
 
-            Date d = c.getBloqueadoHastaUtc() == null ? new Date()
-                    : Date.from(c.getBloqueadoHastaUtc().atZone(ZoneId.systemDefault()).toInstant());
-            spBloqueadoHasta.setValue(d);
-
             modoEdicion = true;
 
         } catch (Exception ex) {
@@ -247,7 +229,8 @@ public class ClienteForm extends JFrame {
     private void eliminar() {
         int row = tabla.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "Selecciona un cliente.", "Aviso", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Selecciona un cliente.",
+                    "Aviso", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         int id = (int) modelo.getValueAt(row, 0);
@@ -269,15 +252,13 @@ public class ClienteForm extends JFrame {
     private void bloquear() {
         int row = tabla.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "Selecciona un cliente para bloquear.", "Aviso", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Selecciona un cliente para bloquear.",
+                    "Aviso", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         try {
             int id = (int) modelo.getValueAt(row, 0);
-            Date d = (Date) spBloqueadoHasta.getValue();
-            LocalDateTime hasta = d == null ? null :
-                    LocalDateTime.ofInstant(d.toInstant(), ZoneId.systemDefault());
-            dao.bloquear(id, hasta);
+            dao.bloquear(id);
             JOptionPane.showMessageDialog(this, "Cliente bloqueado.");
             cargarTabla();
         } catch (Exception ex) {
@@ -289,7 +270,8 @@ public class ClienteForm extends JFrame {
     private void desbloquear() {
         int row = tabla.getSelectedRow();
         if (row < 0) {
-            JOptionPane.showMessageDialog(this, "Selecciona un cliente para desbloquear.", "Aviso", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Selecciona un cliente para desbloquear.",
+                    "Aviso", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         try {

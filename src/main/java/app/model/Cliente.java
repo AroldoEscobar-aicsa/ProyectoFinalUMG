@@ -1,21 +1,17 @@
 package app.model;
 
-import java.time.LocalDateTime;
-
 /** Entidad Cliente (dbo.Clientes) */
 public class Cliente {
 
     private int id;
-    private String codigo;                 // carnet/matrícula (único)
+    private String codigo;     // carnet/matrícula (único)
     private String nombres;
     private String apellidos;
-    private String nit;                    // opcional
-    private String telefono;               // opcional
-    private String email;                  // opcional u obligatorio según tu BD
-    private boolean activo;                // mapea a IsActive
-    private String estado;                 // 'ACTIVO' | 'BLOQUEADO'
-    private LocalDateTime fechaRegistroUtc;
-    private LocalDateTime bloqueadoHastaUtc; // opcional
+    private String nit;        // opcional
+    private String telefono;   // opcional
+    private String email;      // opcional/obligatorio según tu BD
+    private boolean activo;    // mapea a IsActive
+    private String estado;     // 'ACTIVO' | 'BLOQUEADO'
 
     public Cliente() {
         this.activo = true;
@@ -49,12 +45,6 @@ public class Cliente {
 
     public String getEstado() { return estado; }
     public void setEstado(String estado) { this.estado = estado; }
-
-    public LocalDateTime getFechaRegistroUtc() { return fechaRegistroUtc; }
-    public void setFechaRegistroUtc(LocalDateTime fechaRegistroUtc) { this.fechaRegistroUtc = fechaRegistroUtc; }
-
-    public LocalDateTime getBloqueadoHastaUtc() { return bloqueadoHastaUtc; }
-    public void setBloqueadoHastaUtc(LocalDateTime bloqueadoHastaUtc) { this.bloqueadoHastaUtc = bloqueadoHastaUtc; }
 
     @Override public String toString() {
         return codigo + " - " + apellidos + ", " + nombres + (activo ? "" : " (INACTIVO)");

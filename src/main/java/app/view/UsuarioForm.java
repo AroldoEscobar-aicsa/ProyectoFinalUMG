@@ -25,7 +25,7 @@ public class UsuarioForm extends JFrame {
 
     public UsuarioForm() {
         setTitle("Gestión de Usuarios");
-        setSize(900, 560);
+        setSize(1000, 600);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
@@ -35,9 +35,42 @@ public class UsuarioForm extends JFrame {
     }
 
     private void initComponents() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        JPanel form = new JPanel(new GridLayout(7, 2, 8, 8));
-        form.setBorder(BorderFactory.createTitledBorder("Datos del usuario"));
+        // Layout general
+        JPanel root = new JPanel(new BorderLayout(10, 10));
+        root.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        // Header
+        JLabel lblTitulo = new JLabel("Gestión de Usuarios");
+        lblTitulo.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        lblTitulo.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
+        root.add(lblTitulo, BorderLayout.NORTH);
+
+        // Panel izquierdo (formulario)
+        JPanel panelForm = crearPanelFormulario();
+
+        // Panel derecho (tabla)
+        JPanel panelTabla = crearPanelTabla();
+
+        // SplitPane para separar form y tabla
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, panelForm, panelTabla);
+        split.setResizeWeight(0.35); // 35% form, 65% tabla
+        split.setBorder(null);
+
+        root.add(split, BorderLayout.CENTER);
+        setContentPane(root);
+    }
+
+    private JPanel crearPanelFormulario() {
+        JPanel formWrapper = new JPanel(new BorderLayout());
+        formWrapper.setBorder(BorderFactory.createTitledBorder("Datos del usuario"));
+
+        JPanel form = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.gridx = 0;
+        gbc.gridy = 0;
 
         txtUsername = new JTextField();
         txtPassword = new JPasswordField();
@@ -47,33 +80,41 @@ public class UsuarioForm extends JFrame {
         cmbRoles = new JComboBox<>();
         chkActivo = new JCheckBox("Activo", true);
 
-        form.add(new JLabel("Username:"));     form.add(txtUsername);
-        form.add(new JLabel("Contraseña:"));   form.add(txtPassword);
-        form.add(new JLabel("Nombre completo:")); form.add(txtNombre);
-        form.add(new JLabel("Email:"));        form.add(txtEmail);
-        form.add(new JLabel("Teléfono:"));     form.add(txtTelefono);
-        form.add(new JLabel("Rol principal:"));form.add(cmbRoles);
-        form.add(new JLabel("Estado:"));       form.add(chkActivo);
+        // Helper para agregar campos
+        agregarCampo(form, gbc, "Username:", txtUsername);
+        agregarCampo(form, gbc, "Contraseña:", txtPassword);
+        agregarCampo(form, gbc, "Nombre completo:", txtNombre);
+        agregarCampo(form, gbc, "Email:", txtEmail);
+        agregarCampo(form, gbc, "Teléfono:", txtTelefono);
+        agregarCampo(form, gbc, "Rol principal:", cmbRoles);
 
+        // Estado
+        gbc.gridx = 0;
+        gbc.gridy++;
+        form.add(new JLabel("Estado:"), gbc);
+        gbc.gridx = 1;
+        form.add(chkActivo, gbc);
+
+        // Panel de botones
         btnGuardar = new JButton("Guardar");
         btnActualizar = new JButton("Actualizar");
         btnEliminar = new JButton("Desactivar");
         btnLimpiar = new JButton("Limpiar");
 
-        JPanel acciones = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel acciones = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 8));
         acciones.add(btnGuardar);
         acciones.add(btnActualizar);
         acciones.add(btnEliminar);
         acciones.add(btnLimpiar);
 
-        form.add(new JLabel()); form.add(acciones);
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        gbc.fill = GridBagConstraints.NONE;
+        gbc.anchor = GridBagConstraints.CENTER;
+        form.add(acciones, gbc);
 
-        tableUsuarios = new JTable();
-        JScrollPane sp = new JScrollPane(tableUsuarios);
-
-        panel.add(form, BorderLayout.NORTH);
-        panel.add(sp, BorderLayout.CENTER);
-        add(panel);
+        formWrapper.add(form, BorderLayout.NORTH);
 
         // Eventos
         btnGuardar.addActionListener(e -> guardarUsuario());
@@ -81,8 +122,41 @@ public class UsuarioForm extends JFrame {
         btnEliminar.addActionListener(e -> eliminarUsuario());
         btnLimpiar.addActionListener(e -> limpiarFormulario());
 
+        return formWrapper;
+    }
+
+    private void agregarCampo(JPanel form, GridBagConstraints gbc, String labelText, JComponent field) {
+        gbc.gridx = 0;
+        form.add(new JLabel(labelText), gbc);
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        form.add(field, gbc);
+        gbc.gridy++;
+        gbc.weightx = 0;
+    }
+
+    private JPanel crearPanelTabla() {
+        JPanel panel = new JPanel(new BorderLayout(5, 5));
+        panel.setBorder(BorderFactory.createTitledBorder("Lista de usuarios"));
+
+        tableUsuarios = new JTable();
+        tableUsuarios.setFillsViewportHeight(true);
+        tableUsuarios.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        JScrollPane sp = new JScrollPane(tableUsuarios);
+
+        // Pequeño texto arriba de la tabla
+        JLabel lblInfo = new JLabel("Doble clic o clic en la tabla para editar un usuario.");
+        lblInfo.setFont(new Font("Segoe UI", Font.ITALIC, 11));
+        lblInfo.setBorder(BorderFactory.createEmptyBorder(0, 2, 4, 2));
+
+        panel.add(lblInfo, BorderLayout.NORTH);
+        panel.add(sp, BorderLayout.CENTER);
+
+        // Evento de selección
         tableUsuarios.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent e) {
+            @Override
+            public void mouseClicked(MouseEvent e) {
                 int fila = tableUsuarios.getSelectedRow();
                 if (fila >= 0) {
                     usuarioSeleccionadoId = (int) tableUsuarios.getValueAt(fila, 0);
@@ -97,7 +171,11 @@ public class UsuarioForm extends JFrame {
                 }
             }
         });
+
+        return panel;
     }
+
+    // ============ LÓGICA ============
 
     private void cargarRoles() {
         try {
@@ -128,6 +206,9 @@ public class UsuarioForm extends JFrame {
                 });
             }
             tableUsuarios.setModel(model);
+            // ancho sugerido
+            tableUsuarios.getColumnModel().getColumn(0).setPreferredWidth(40);  // ID
+            tableUsuarios.getColumnModel().getColumn(1).setPreferredWidth(100); // Username
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Error al cargar usuarios: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
@@ -169,7 +250,10 @@ public class UsuarioForm extends JFrame {
         }
         try {
             Usuario u = usuarioDAO.buscarPorId(usuarioSeleccionadoId);
-            if (u == null) { JOptionPane.showMessageDialog(this, "Usuario no encontrado."); return; }
+            if (u == null) {
+                JOptionPane.showMessageDialog(this, "Usuario no encontrado.");
+                return;
+            }
 
             u.setUsername(txtUsername.getText().trim());
             u.setNombreCompleto(txtNombre.getText().trim());
@@ -225,6 +309,7 @@ public class UsuarioForm extends JFrame {
     }
 
     private void seleccionarRolEnCombo(String rolNombre) {
+        if (rolNombre == null) return;
         ComboBoxModel<Rol> m = cmbRoles.getModel();
         for (int i = 0; i < m.getSize(); i++) {
             Rol r = m.getElementAt(i);

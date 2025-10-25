@@ -13,12 +13,15 @@ public class UsuarioDAO {
 
     // ----------- Roles -------------
     public List<Rol> listarRoles() throws SQLException {
-        String sql = "SELECT Id, Nombre FROM dbo.Roles WHERE IsActive=1 ORDER BY Nombre";
+        // ⬅️ Quitamos IsActive porque no existe en la tabla Roles
+        String sql = "SELECT Id, Nombre FROM dbo.Roles ORDER BY Nombre";
         List<Rol> roles = new ArrayList<>();
         try (Connection cn = Conexion.getConnection();
              PreparedStatement ps = cn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) roles.add(new Rol(rs.getInt("Id"), rs.getString("Nombre")));
+            while (rs.next()) {
+                roles.add(new Rol(rs.getInt("Id"), rs.getString("Nombre")));
+            }
         }
         return roles;
     }
@@ -69,9 +72,18 @@ public class UsuarioDAO {
     }
 
     public List<Usuario> listarTodos() throws Exception {
+        // ⬅️ Añadimos IntentosFallidos y UltimoLoginUtc para que mapUsuario no falle
         String sql = """
-            SELECT u.Id, u.Username, u.NombreCompleto, u.Email, u.Telefono, u.IsActive,
-                   ur.IdRol AS RolId, r.Nombre AS RolNombre
+            SELECT u.Id,
+                   u.Username,
+                   u.NombreCompleto,
+                   u.Email,
+                   u.Telefono,
+                   u.IsActive,
+                   u.IntentosFallidos,
+                   u.UltimoLoginUtc,
+                   ur.IdRol AS RolId,
+                   r.Nombre AS RolNombre
             FROM dbo.Usuarios u
             OUTER APPLY (SELECT TOP 1 IdRol FROM dbo.UsuarioRoles WHERE IdUsuario=u.Id ORDER BY IdRol) ur
             LEFT JOIN dbo.Roles r ON r.Id = ur.IdRol

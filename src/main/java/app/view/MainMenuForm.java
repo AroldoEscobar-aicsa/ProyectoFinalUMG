@@ -15,7 +15,28 @@ public class MainMenuForm extends JFrame {
     private final Usuario usuario;
 
     // Tiles/botones
-    private JButton btnAutores, btnLibros, btnClientes, btnPrestamos, btnUsuarios, btnSalir;
+    private JButton btnAutores;
+    private JButton btnLibros;
+    private JButton btnClientes;
+    private JButton btnPrestamos;
+    private JButton btnUsuarios;
+    private JButton btnSalir;
+
+    // Nuevos módulos
+    private JButton btnReservas;
+    private JButton btnMultasPendientes;
+    private JButton btnBusquedaLibros;
+
+    private JButton btnCategorias;
+    private JButton btnPrestamosDevoluciones;
+    private JButton btnInventarioFisico;
+    private JButton btnReportesOperativos;
+
+    private JButton btnMultas;
+    private JButton btnCajaDiaria;
+    private JButton btnRecaudacion;
+    private JButton btnReportesFinancieros;
+    private JButton btnExoneraciones;
 
     // Barra superior e inferior
     private JLabel lblBienvenida, lblRol;
@@ -38,7 +59,7 @@ public class MainMenuForm extends JFrame {
     private void inicializarComponentes() {
         setTitle("Menú Principal - " + (usuario.getNombreCompleto() != null ? usuario.getNombreCompleto() : usuario.getUsername()));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(880, 560);
+        setSize(1000, 600);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(12, 12));
         ((JComponent) getContentPane()).setBorder(new EmptyBorder(12, 12, 12, 12));
@@ -65,10 +86,12 @@ public class MainMenuForm extends JFrame {
         add(header, BorderLayout.NORTH);
 
         // Tiles center
-        JPanel tiles = new JPanel(new GridLayout(2, 3, 16, 16));
+        // 0 filas y 4 columnas = se acomodan automáticamente en columnas
+        JPanel tiles = new JPanel(new GridLayout(0, 4, 16, 16));
         tiles.setBorder(new EmptyBorder(12, 0, 12, 0));
         tiles.setOpaque(false);
 
+        // Botones existentes
         btnAutores   = createTileButton("Autores", "Catálogo de autores", "✍️");
         btnLibros    = createTileButton("Libros", "Gestión de libros", "📚");
         btnClientes  = createTileButton("Clientes", "Lectores / usuarios", "👥");
@@ -76,10 +99,45 @@ public class MainMenuForm extends JFrame {
         btnUsuarios  = createTileButton("Usuarios", "Administración del sistema", "🛡️");
         btnSalir     = createTileButton("Cerrar Sesión", "Finalizar y volver al login", "🚪");
 
+        // Botones nuevos (Cliente)
+        btnReservas          = createTileButton("Reservas", "Gestión de reservas", "📅");
+        btnMultasPendientes  = createTileButton("Multas pendientes", "Tus multas por pagar", "⚠️");
+        btnBusquedaLibros    = createTileButton("Búsqueda de libros", "Buscar en el catálogo", "🔍");
+
+        // Botones nuevos (Bibliotecario)
+        btnCategorias            = createTileButton("Categorías", "Gestión de categorías", "🏷️");
+        btnPrestamosDevoluciones = createTileButton("Préstamos/Devoluciones", "Operaciones de circulación", "🔄");
+        btnInventarioFisico      = createTileButton("Inventario físico", "Conteos, ajustes y stock", "📦");
+        btnReportesOperativos    = createTileButton("Reportes operativos", "Movimientos diarios", "📊");
+
+        // Botones nuevos (Financiero)
+        btnMultas             = createTileButton("Multas", "Gestión de multas", "💰");
+        btnCajaDiaria         = createTileButton("Caja diaria", "Corte y arqueo", "🧾");
+        btnRecaudacion        = createTileButton("Recaudación", "Resumen de ingresos", "📈");
+        btnReportesFinancieros= createTileButton("Reportes financieros", "Informes de caja y multas", "📉");
+        btnExoneraciones      = createTileButton("Exoneraciones", "Gestión de condonaciones", "✅");
+
+        // Agregamos todos al panel (el permiso los habilita / deshabilita)
         tiles.add(btnAutores);
         tiles.add(btnLibros);
         tiles.add(btnClientes);
         tiles.add(btnPrestamos);
+
+        tiles.add(btnReservas);
+        tiles.add(btnMultasPendientes);
+        tiles.add(btnBusquedaLibros);
+        tiles.add(btnCategorias);
+
+        tiles.add(btnPrestamosDevoluciones);
+        tiles.add(btnInventarioFisico);
+        tiles.add(btnReportesOperativos);
+        tiles.add(btnMultas);
+
+        tiles.add(btnCajaDiaria);
+        tiles.add(btnRecaudacion);
+        tiles.add(btnReportesFinancieros);
+        tiles.add(btnExoneraciones);
+
         tiles.add(btnUsuarios);
         tiles.add(btnSalir);
 
@@ -124,42 +182,110 @@ public class MainMenuForm extends JFrame {
     }
 
     private void configurarPermisos() {
-        String rol = (usuario.getRolPrincipal() != null ? usuario.getRolPrincipal() : "").trim().toUpperCase();
+        String rolRaw = (usuario.getRolPrincipal() != null ? usuario.getRolPrincipal() : "").trim().toUpperCase();
 
+        // Normalizar algunos posibles valores desde BD
+        String rol;
+        if (rolRaw.startsWith("ADMIN")) {
+            rol = "ADMIN";
+        } else if (rolRaw.startsWith("BIBLIOT")) {
+            rol = "BIBLIOTECARIO";
+        } else if (rolRaw.startsWith("FINAN")) {
+            rol = "FINANCIERO";
+        } else if (rolRaw.startsWith("CLIEN")) {
+            rol = "CLIENTE";
+        } else {
+            rol = rolRaw;
+        }
+
+        // Deshabilitar todo por defecto
         btnAutores.setEnabled(false);
         btnLibros.setEnabled(false);
         btnClientes.setEnabled(false);
         btnPrestamos.setEnabled(false);
         btnUsuarios.setEnabled(false);
 
+        btnReservas.setEnabled(false);
+        btnMultasPendientes.setEnabled(false);
+        btnBusquedaLibros.setEnabled(false);
+
+        btnCategorias.setEnabled(false);
+        btnPrestamosDevoluciones.setEnabled(false);
+        btnInventarioFisico.setEnabled(false);
+        btnReportesOperativos.setEnabled(false);
+
+        btnMultas.setEnabled(false);
+        btnCajaDiaria.setEnabled(false);
+        btnRecaudacion.setEnabled(false);
+        btnReportesFinancieros.setEnabled(false);
+        btnExoneraciones.setEnabled(false);
+
+        // Siempre puede cerrar sesión
+        btnSalir.setEnabled(true);
+
         switch (rol) {
             case "ADMIN":
+                // Administrador ve TODO
                 btnAutores.setEnabled(true);
                 btnLibros.setEnabled(true);
                 btnClientes.setEnabled(true);
                 btnPrestamos.setEnabled(true);
                 btnUsuarios.setEnabled(true);
+
+                btnReservas.setEnabled(true);
+                btnMultasPendientes.setEnabled(true);
+                btnBusquedaLibros.setEnabled(true);
+
+                btnCategorias.setEnabled(true);
+                btnPrestamosDevoluciones.setEnabled(true);
+                btnInventarioFisico.setEnabled(true);
+                btnReportesOperativos.setEnabled(true);
+
+                btnMultas.setEnabled(true);
+                btnCajaDiaria.setEnabled(true);
+                btnRecaudacion.setEnabled(true);
+                btnReportesFinancieros.setEnabled(true);
+                btnExoneraciones.setEnabled(true);
                 break;
+
             case "BIBLIOTECARIO":
+                // Libros, Autores, Categorías, Préstamos/Devoluciones, Reservas, Inventario físico, Reportes operativos
                 btnAutores.setEnabled(true);
                 btnLibros.setEnabled(true);
-                btnClientes.setEnabled(true);
-                btnPrestamos.setEnabled(true);
+                btnCategorias.setEnabled(true);
+                btnPrestamos.setEnabled(true);              // opción general de préstamos
+                btnPrestamosDevoluciones.setEnabled(true);  // botón específico
+                btnReservas.setEnabled(true);
+                btnInventarioFisico.setEnabled(true);
+                btnReportesOperativos.setEnabled(true);
                 break;
+
             case "FINANCIERO":
-                btnLibros.setEnabled(true);
-                btnClientes.setEnabled(true);
+                // Multas, Caja diaria, Recaudación, Reportes financieros, Exoneraciones
+                btnMultas.setEnabled(true);
+                btnCajaDiaria.setEnabled(true);
+                btnRecaudacion.setEnabled(true);
+                btnReportesFinancieros.setEnabled(true);
+                btnExoneraciones.setEnabled(true);
                 break;
+
             case "CLIENTE":
-                btnAutores.setEnabled(true);
-                btnLibros.setEnabled(true);
+                // Préstamos, Reservas, Multas pendientes, Búsqueda de libros
+                btnPrestamos.setEnabled(true);
+                btnReservas.setEnabled(true);
+                btnMultasPendientes.setEnabled(true);
+                btnBusquedaLibros.setEnabled(true);
                 break;
+
             default:
-                btnAutores.setEnabled(true);
+                // Cualquier otro rol raro: no tiene nada, más que cerrar sesión
+                break;
         }
     }
 
     private void configurarEventos() {
+        // EXISTENTES
+
         btnAutores.addActionListener((ActionEvent e) -> {
             try { new AutorForm().setVisible(true); }
             catch (Throwable ex) { showInfo("Módulo de Autores no disponible: " + ex.getMessage()); }
@@ -170,7 +296,6 @@ public class MainMenuForm extends JFrame {
             catch (Throwable ex) { showError("No se pudo abrir Libros: " + ex.getMessage()); }
         });
 
-        // >>> INTEGRACIÓN DEL MÓDULO DE CLIENTES <<<
         btnClientes.addActionListener(e -> {
             try { new ClienteForm().setVisible(true); }
             catch (Throwable ex) { showError("No se pudo abrir Clientes: " + ex.getMessage()); }
@@ -195,6 +320,56 @@ public class MainMenuForm extends JFrame {
                 new LoginForm().setVisible(true);
             }
         });
+
+        // NUEVOS: por ahora solo mensaje de "no implementado"
+
+        btnReservas.addActionListener(e ->
+                showInfo("Módulo \"Reservas\" aún no implementado.")
+        );
+
+        btnMultasPendientes.addActionListener(e ->
+                showInfo("Módulo \"Multas pendientes\" aún no implementado.")
+        );
+
+        btnBusquedaLibros.addActionListener(e ->
+                showInfo("Módulo \"Búsqueda de libros\" aún no implementado.")
+        );
+
+        btnCategorias.addActionListener(e ->
+                showInfo("Módulo \"Categorías\" aún no implementado.")
+        );
+
+        btnPrestamosDevoluciones.addActionListener(e ->
+                showInfo("Módulo \"Préstamos / Devoluciones\" aún no implementado.")
+        );
+
+        btnInventarioFisico.addActionListener(e ->
+                showInfo("Módulo \"Inventario físico\" aún no implementado.")
+        );
+
+        btnReportesOperativos.addActionListener(e ->
+                showInfo("Módulo \"Reportes operativos\" aún no implementado.")
+        );
+
+        btnMultas.addActionListener(e ->
+                showInfo("Módulo \"Multas\" aún no implementado.")
+        );
+
+        btnCajaDiaria.addActionListener(e ->
+                showInfo("Módulo \"Caja diaria\" aún no implementado.")
+        );
+
+        btnRecaudacion.addActionListener(e ->
+                showInfo("Módulo \"Recaudación\" aún no implementado.")
+        );
+
+        btnReportesFinancieros.addActionListener(e ->
+                showInfo("Módulo \"Reportes financieros\" aún no implementado.")
+        );
+
+        btnExoneraciones.addActionListener(e ->
+                showInfo("Módulo \"Exoneraciones\" aún no implementado.")
+        );
     }
 
     private void showInfo(String msg) {

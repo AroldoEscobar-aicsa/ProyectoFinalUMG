@@ -1,108 +1,65 @@
 package app.model;
 
-import java.util.Date;
+import java.time.LocalDateTime;
 
-/**
- * Modelo para la entidad Prestamos.
- * Representa el registro de un préstamo de una CopiaLibro a un Cliente.
- * Basado en los requisitos del Módulo D (Préstamos y Devoluciones).
- */
 public class Prestamos {
+    private int id;
+    private int idCliente;
+    private String codigoCliente;
+    private String nombreCliente;
 
-    private int idPrestamo;
-    private int idCopiaLibro; // El ID de la copia específica (no del libro) [cite: 30]
-    private int idCliente; // El ID del cliente que presta
+    private int idCopia;
+    private String codigoBarra;
+    private int idLibro;
+    private String titulo;
 
-    // Es útil saber qué bibliotecario registró el préstamo (para auditoría [cite: 50])
-    private int idUsuarioBibliotecario;
+    private LocalDateTime fechaPrestamoUtc;
+    private LocalDateTime fechaVencimientoUtc;
+    private LocalDateTime fechaDevolucionUtc;
+    private int renovaciones;
+    private String estado; // ACTIVO, ATRASADO, CERRADO, CANCELADO
+    private double multaCalculada;
 
-    private Date fechaPrestamo; // Fecha y hora en que se realiza el préstamo
-    private Date fechaVencimiento; // Fecha calculada de devolución [cite: 31]
-    private Date fechaDevolucion; // Fecha real (null si no ha sido devuelto)
+    // Getters & setters
+    public int getId() { return id; }
+    public void setId(int id) { this.id = id; }
 
-    private String estado; // Ej: "Activo", "Devuelto", "Vencido"
+    public int getIdCliente() { return idCliente; }
+    public void setIdCliente(int idCliente) { this.idCliente = idCliente; }
 
-    // Constructor vacío
-    public Prestamos() {
-    }
+    public String getCodigoCliente() { return codigoCliente; }
+    public void setCodigoCliente(String codigoCliente) { this.codigoCliente = codigoCliente; }
 
-    // Constructor completo (para leer datos de la BD)
-    public Prestamos(int idPrestamo, int idCopiaLibro, int idCliente, int idUsuarioBibliotecario,
-                     Date fechaPrestamo, Date fechaVencimiento, Date fechaDevolucion, String estado) {
-        this.idPrestamo = idPrestamo;
-        this.idCopiaLibro = idCopiaLibro;
-        this.idCliente = idCliente;
-        this.idUsuarioBibliotecario = idUsuarioBibliotecario;
-        this.fechaPrestamo = fechaPrestamo;
-        this.fechaVencimiento = fechaVencimiento;
-        this.fechaDevolucion = fechaDevolucion;
-        this.estado = estado;
-    }
+    public String getNombreCliente() { return nombreCliente; }
+    public void setNombreCliente(String nombreCliente) { this.nombreCliente = nombreCliente; }
 
-    // --- Getters y Setters ---
-    // (Asegúrate de generar todos los getters y setters para los atributos)
+    public int getIdCopia() { return idCopia; }
+    public void setIdCopia(int idCopia) { this.idCopia = idCopia; }
 
-    public int getIdPrestamo() {
-        return idPrestamo;
-    }
+    public String getCodigoBarra() { return codigoBarra; }
+    public void setCodigoBarra(String codigoBarra) { this.codigoBarra = codigoBarra; }
 
-    public void setIdPrestamo(int idPrestamo) {
-        this.idPrestamo = idPrestamo;
-    }
+    public int getIdLibro() { return idLibro; }
+    public void setIdLibro(int idLibro) { this.idLibro = idLibro; }
 
-    public int getIdCopiaLibro() {
-        return idCopiaLibro;
-    }
+    public String getTitulo() { return titulo; }
+    public void setTitulo(String titulo) { this.titulo = titulo; }
 
-    public void setIdCopiaLibro(int idCopiaLibro) {
-        this.idCopiaLibro = idCopiaLibro;
-    }
+    public LocalDateTime getFechaPrestamoUtc() { return fechaPrestamoUtc; }
+    public void setFechaPrestamoUtc(LocalDateTime fechaPrestamoUtc) { this.fechaPrestamoUtc = fechaPrestamoUtc; }
 
-    public int getIdCliente() {
-        return idCliente;
-    }
+    public LocalDateTime getFechaVencimientoUtc() { return fechaVencimientoUtc; }
+    public void setFechaVencimientoUtc(LocalDateTime fechaVencimientoUtc) { this.fechaVencimientoUtc = fechaVencimientoUtc; }
 
-    public void setIdCliente(int idCliente) {
-        this.idCliente = idCliente;
-    }
+    public LocalDateTime getFechaDevolucionUtc() { return fechaDevolucionUtc; }
+    public void setFechaDevolucionUtc(LocalDateTime fechaDevolucionUtc) { this.fechaDevolucionUtc = fechaDevolucionUtc; }
 
-    public int getIdUsuarioBibliotecario() {
-        return idUsuarioBibliotecario;
-    }
+    public int getRenovaciones() { return renovaciones; }
+    public void setRenovaciones(int renovaciones) { this.renovaciones = renovaciones; }
 
-    public void setIdUsuarioBibliotecario(int idUsuarioBibliotecario) {
-        this.idUsuarioBibliotecario = idUsuarioBibliotecario;
-    }
+    public String getEstado() { return estado; }
+    public void setEstado(String estado) { this.estado = estado; }
 
-    public Date getFechaPrestamo() {
-        return fechaPrestamo;
-    }
-
-    public void setFechaPrestamo(Date fechaPrestamo) {
-        this.fechaPrestamo = fechaPrestamo;
-    }
-
-    public Date getFechaVencimiento() {
-        return fechaVencimiento;
-    }
-
-    public void setFechaVencimiento(Date fechaVencimiento) {
-        this.fechaVencimiento = fechaVencimiento;
-    }
-
-    public Date getFechaDevolucion() {
-        return fechaDevolucion;
-    }
-
-    public void setFechaDevolucion(Date fechaDevolucion) {
-        this.fechaDevolucion = fechaDevolucion;
-    }
-
-    public String getEstado() {
-        return estado;
-    }
-
-    public void setEstado(String estado) {
-        this.estado = estado;
-    }
+    public double getMultaCalculada() { return multaCalculada; }
+    public void setMultaCalculada(double multaCalculada) { this.multaCalculada = multaCalculada; }
 }

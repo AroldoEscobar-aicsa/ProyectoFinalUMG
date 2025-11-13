@@ -9,6 +9,7 @@ import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.util.ArrayList;
 import java.util.List;
 
 public class InventarioFisicoForm extends JFrame {
@@ -95,18 +96,20 @@ public class InventarioFisicoForm extends JFrame {
 
             @Override
             public Class<?> getColumnClass(int columnIndex) {
-                if (columnIndex == 0 || columnIndex == 2 || columnIndex == 3 || columnIndex == 4) {
-                    return Integer.class;
-                }
-                return String.class;
+                return switch (columnIndex) {
+                    case 0, 2, 3, 4 -> Integer.class;
+                    default -> String.class;
+                };
             }
         };
 
         table = new JTable(tableModel);
         table.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        table.setRowHeight(22);
+
         JScrollPane spTable = new JScrollPane(table);
 
-        // recalcular diferencia cuando cambie la cantidad física
+        // Recalcular diferencia cuando cambie la cantidad física
         tableModel.addTableModelListener(new TableModelListener() {
             @Override
             public void tableChanged(TableModelEvent e) {
@@ -142,8 +145,8 @@ public class InventarioFisicoForm extends JFrame {
                         d.getIdLibro(),
                         d.getTituloLibro(),
                         d.getCantidadSistema(),
-                        d.getCantidadFisica(),
-                        d.getDiferencia()
+                        d.getCantidadFisica(), // por defecto = sistema
+                        0                       // diferencia
                 });
             }
             JOptionPane.showMessageDialog(this, "Libros cargados para conteo.", "Información",
@@ -166,7 +169,17 @@ public class InventarioFisicoForm extends JFrame {
                     cantFisica = Integer.parseInt(fisObj.toString());
                 }
             }
-            int dif = cantFisica - (cantSistema != null ? cantSistema : 0);
+
+            if (cantFisica < 0) {
+                JOptionPane.showMessageDialog(this,
+                        "La cantidad física no puede ser negativa (fila " + (row + 1) + ").",
+                        "Validación", JOptionPane.WARNING_MESSAGE);
+                cantFisica = 0;
+                tableModel.setValueAt(0, row, 3);
+            }
+
+            int sis = cantSistema != null ? cantSistema : 0;
+            int dif = cantFisica - sis;
             tableModel.setValueAt(dif, row, 4);
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this, "Cantidad física inválida en fila " + (row + 1),
@@ -187,15 +200,17 @@ public class InventarioFisicoForm extends JFrame {
         }
 
         int op = JOptionPane.showConfirmDialog(this,
-                "¿Guardar el conteo de inventario?", "Confirmar",
+                "¿Guardar el conteo de inventario y aplicar los ajustes?",
+                "Confirmar",
                 JOptionPane.YES_NO_OPTION);
 
         if (op != JOptionPane.YES_OPTION) return;
 
         try {
             String comentario = txtComentario.getText();
-            int idConteo = inventarioDAO.crearConteo(usuarioActual.getId(), comentario);
 
+            // Construimos la lista de detalles desde la tabla
+            List<InventarioConteoDetalle> detalles = new ArrayList<>();
             for (int i = 0; i < tableModel.getRowCount(); i++) {
                 int idLibro = (Integer) tableModel.getValueAt(i, 0);
                 Object fisObj = tableModel.getValueAt(i, 3);
@@ -204,13 +219,25 @@ public class InventarioFisicoForm extends JFrame {
                     if (fisObj instanceof Integer) cantFisica = (Integer) fisObj;
                     else cantFisica = Integer.parseInt(fisObj.toString());
                 }
-                inventarioDAO.insertarDetalleConteo(idConteo, idLibro, cantFisica);
+                if (cantFisica < 0) cantFisica = 0;
+
+                InventarioConteoDetalle d = new InventarioConteoDetalle();
+                d.setIdLibro(idLibro);
+                d.setCantidadFisica(cantFisica);
+                detalles.add(d);
             }
 
+            int idConteo = inventarioDAO.guardarConteoConAjustes(
+                    usuarioActual.getId(),
+                    comentario,
+                    detalles
+            );
+
             JOptionPane.showMessageDialog(this,
-                    "Conteo guardado correctamente con Id #" + idConteo,
+                    "Conteo guardado y ajustes aplicados correctamente. Id conteo #" + idConteo,
                     "Éxito", JOptionPane.INFORMATION_MESSAGE);
             dispose();
+
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this,
                     "Error al guardar el conteo: " + ex.getMessage(),

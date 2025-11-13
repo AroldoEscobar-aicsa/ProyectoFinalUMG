@@ -222,6 +222,7 @@ public class MainMenuForm extends JFrame {
         btnRecaudacion.setEnabled(false);
         btnReportesFinancieros.setEnabled(false);
         btnExoneraciones.setEnabled(false);
+        btnEditoriales.setEnabled(false);
 
         // Siempre puede cerrar sesión
         btnSalir.setEnabled(true);
@@ -259,6 +260,7 @@ public class MainMenuForm extends JFrame {
                 btnCategorias.setEnabled(true);
                 btnPrestamos.setEnabled(true);              // opción general de préstamos
                 //btnPrestamosDevoluciones.setEnabled(true);  // botón específico
+                btnClientes.setEnabled(true);
                 btnReservas.setEnabled(true);
                 btnInventarioFisico.setEnabled(true);
                 btnReportesOperativos.setEnabled(true);
@@ -307,8 +309,11 @@ public class MainMenuForm extends JFrame {
         });
 
         btnPrestamos.addActionListener(e -> {
-            try { new PrestamosForm().setVisible(true); }
-            catch (Throwable ex) { showError("No se pudo abrir Préstamos: " + ex.getMessage()); }
+            try {
+                new PrestamosForm(usuario).setVisible(true);
+            } catch (Throwable ex) {
+                showError("No se pudo abrir Préstamos: " + ex.getMessage());
+            }
         });
 
         btnUsuarios.addActionListener(e -> {
@@ -328,17 +333,29 @@ public class MainMenuForm extends JFrame {
 
         // NUEVOS: por ahora solo mensaje de "no implementado"
 
-        btnReservas.addActionListener(e ->
-                showInfo("Módulo \"Reservas\" aún no implementado.")
-        );
+        btnReservas.addActionListener(e -> {
+            try {
+                new ReservasForm(usuario).setVisible(true);
+            } catch (Throwable ex) {
+                showError("No se pudo abrir \"Reservas\": " + ex.getMessage());
+            }
+        });
 
-        btnMultasPendientes.addActionListener(e ->
-                showInfo("Módulo \"Multas pendientes\" aún no implementado.")
-        );
+        btnMultasPendientes.addActionListener(e -> {
+            try {
+                new MultasPendientesForm(usuario).setVisible(true);
+            } catch (Throwable ex) {
+                showError("No se pudo abrir \"Multas pendientes\": " + ex.getMessage());
+            }
+        });
 
-        btnBusquedaLibros.addActionListener(e ->
-                showInfo("Módulo \"Búsqueda de libros\" aún no implementado.")
-        );
+        btnBusquedaLibros.addActionListener(e -> {
+            try {
+                new BusquedaLibrosForm().setVisible(true);
+            } catch (Throwable ex) {
+                showError("No se pudo abrir Categorías: " + ex.getMessage());
+            }
+        });
 
         btnCategorias.addActionListener(e -> {
             try {

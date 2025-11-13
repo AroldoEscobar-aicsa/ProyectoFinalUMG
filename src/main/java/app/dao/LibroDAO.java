@@ -209,6 +209,92 @@ public class LibroDAO {
         return lista;
     }
 
+    /**
+     * Búsqueda de libros contra la vista vw_CatalogoLibros,
+     * combinando título, autores, categorías e ISBN,
+     * y opcionalmente filtrando solo libros con copias disponibles.
+     */
+    public List<app.model.LibroBusqueda> buscarLibrosCatalogo(String textoBusqueda,
+                                                              boolean soloDisponibles) throws SQLException {
+        List<app.model.LibroBusqueda> lista = new ArrayList<>();
+
+        StringBuilder sql = new StringBuilder();
+        sql.append("""
+            SELECT 
+                v.Id,
+                v.Titulo,
+                v.ISBN,
+                v.Edicion,
+                v.Anio,
+                v.Idioma,
+                v.Editorial,
+                v.Autores,
+                v.Categorias,
+                v.CopiasTotales,
+                v.CopiasDisponibles,
+                l.StockMinimo
+            FROM dbo.vw_CatalogoLibros v
+            JOIN dbo.Libros l ON l.Id = v.Id
+            WHERE 1 = 1
+        """);
+
+        boolean tieneFiltroTexto = textoBusqueda != null && !textoBusqueda.trim().isEmpty();
+        if (tieneFiltroTexto) {
+            sql.append("""
+                 AND (
+                     v.Titulo     LIKE ? OR
+                     v.Autores    LIKE ? OR
+                     v.Categorias LIKE ? OR
+                     v.ISBN       LIKE ?
+                 )
+            """);
+        }
+
+        if (soloDisponibles) {
+            sql.append(" AND v.CopiasDisponibles > 0 ");
+        }
+
+        sql.append(" ORDER BY v.Titulo ");
+
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql.toString())) {
+
+            int idx = 1;
+            if (tieneFiltroTexto) {
+                String like = "%" + textoBusqueda.trim() + "%";
+                ps.setString(idx++, like);
+                ps.setString(idx++, like);
+                ps.setString(idx++, like);
+                ps.setString(idx++, like);
+            }
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    app.model.LibroBusqueda l = new app.model.LibroBusqueda();
+                    l.setId(rs.getInt("Id"));
+                    l.setTitulo(rs.getString("Titulo"));
+                    l.setIsbn(rs.getString("ISBN"));
+                    l.setEdicion(rs.getString("Edicion"));
+
+                    int anio = rs.getInt("Anio");
+                    l.setAnio(rs.wasNull() ? null : anio);
+
+                    l.setIdioma(rs.getString("Idioma"));
+                    l.setEditorial(rs.getString("Editorial"));
+                    l.setAutores(rs.getString("Autores"));
+                    l.setCategorias(rs.getString("Categorias"));
+                    l.setCopiasTotales(rs.getInt("CopiasTotales"));
+                    l.setCopiasDisponibles(rs.getInt("CopiasDisponibles"));
+                    l.setStockMinimo(rs.getInt("StockMinimo"));
+
+                    lista.add(l);
+                }
+            }
+        }
+
+        return lista;
+    }
+
     // ---------- Helpers TX ----------
 
     private void borrarAutoresTx(Connection cn, int idLibro) throws SQLException {

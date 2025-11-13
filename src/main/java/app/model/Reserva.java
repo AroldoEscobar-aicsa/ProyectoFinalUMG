@@ -4,33 +4,35 @@ import java.util.Date;
 
 /**
  * Modelo para la entidad Reserva.
- * Basado en los requisitos del Módulo E y Modelo de Datos (Fuente 85).
+ * Mapea la tabla dbo.Reservas:
+ *  - Id         -> idReserva
+ *  - IdCliente  -> idCliente
+ *  - IdLibro    -> idLibro
+ *  - IdCopia    -> idCopia (opcional)
+ *  - CreadoUtc  -> fechaCreado
+ *  - ExpiraUtc  -> fechaExpira
+ *  - Estado     -> estado
+ *  - Notas      -> notas
+ *
+ * Campo posicionCola se calcula en los SELECT (no existe físicamente).
  */
 public class Reserva {
 
     private int idReserva;
     private int idCliente;
     private int idLibro;
-    private Date fechaReserva;
-    private String estado; // "Pendiente", "Expirada", "Completada" [cite: 85]
-    private int posicionCola; // [cite: 85]
+    private Integer idCopia;       // puede ser null
+    private Date fechaCreado;      // CreadoUtc
+    private Date fechaExpira;      // ExpiraUtc (puede ser null)
+    private String estado;         // "PENDIENTE", "COMPLETADA", "EXPIRADA", etc.
+    private String notas;          // nvarchar(200)
 
-    // Constructor vacío
-    public Reserva() {
-    }
+    // Campo calculado (no está en la tabla)
+    private int posicionCola;
 
-    // Constructor completo
-    public Reserva(int idReserva, int idCliente, int idLibro, Date fechaReserva, String estado, int posicionCola) {
-        this.idReserva = idReserva;
-        this.idCliente = idCliente;
-        this.idLibro = idLibro;
-        this.fechaReserva = fechaReserva;
-        this.estado = estado;
-        this.posicionCola = posicionCola;
-    }
+    public Reserva() {}
 
     // --- Getters y Setters ---
-    // (Se deben generar todos los getters y setters para los atributos)
 
     public int getIdReserva() {
         return idReserva;
@@ -56,12 +58,28 @@ public class Reserva {
         this.idLibro = idLibro;
     }
 
-    public Date getFechaReserva() {
-        return fechaReserva;
+    public Integer getIdCopia() {
+        return idCopia;
     }
 
-    public void setFechaReserva(Date fechaReserva) {
-        this.fechaReserva = fechaReserva;
+    public void setIdCopia(Integer idCopia) {
+        this.idCopia = idCopia;
+    }
+
+    public Date getFechaCreado() {
+        return fechaCreado;
+    }
+
+    public void setFechaCreado(Date fechaCreado) {
+        this.fechaCreado = fechaCreado;
+    }
+
+    public Date getFechaExpira() {
+        return fechaExpira;
+    }
+
+    public void setFechaExpira(Date fechaExpira) {
+        this.fechaExpira = fechaExpira;
     }
 
     public String getEstado() {
@@ -70,6 +88,14 @@ public class Reserva {
 
     public void setEstado(String estado) {
         this.estado = estado;
+    }
+
+    public String getNotas() {
+        return notas;
+    }
+
+    public void setNotas(String notas) {
+        this.notas = notas;
     }
 
     public int getPosicionCola() {

@@ -5,14 +5,16 @@ import app.model.Autor;
 import app.model.Categoria;
 import app.model.Editorial;
 import app.model.Libro;
+import app.model.LibroBusqueda;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,12 +30,17 @@ public class LibroForm extends JFrame {
     private JList<Categoria> lstCategorias;
     private JCheckBox chkActivo;
 
+    // Buscador
+    private JTextField txtBuscar;
+    private JCheckBox chkSoloDisponibles;
+
     // Tabla
     private JTable tabla;
     private DefaultTableModel modelo;
 
     // Botones
     private JButton btnNuevo, btnGuardar, btnEditar, btnEliminar, btnRefrescar, btnCerrar;
+    private JButton btnBuscar;
 
     private boolean modoEdicion = false;
 
@@ -45,12 +52,19 @@ public class LibroForm extends JFrame {
         setLayout(new BorderLayout(10, 10));
 
         initUI();
-        cargarCombosYListas();
-        cargarTabla();
+
+        // Mostrar cursor de espera mientras se cargan datos
+        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+        try {
+            cargarCombosYListas();
+            cargarTabla(); // carga inicial sin filtros
+        } finally {
+            setCursor(Cursor.getDefaultCursor());
+        }
     }
 
     private void initUI() {
-        // Panel superior (datos básicos)
+        // ========= PANEL DE DATOS BÁSICOS =========
         JPanel pDatos = new JPanel(new GridLayout(5, 4, 8, 8));
         pDatos.setBorder(BorderFactory.createTitledBorder("Datos del libro"));
 
@@ -81,9 +95,7 @@ public class LibroForm extends JFrame {
         // relleno
         pDatos.add(new JLabel(""));              pDatos.add(new JLabel(""));
 
-        add(pDatos, BorderLayout.NORTH);
-
-        // Panel central (listas autores / categorías)
+        // ========= PANEL DE RELACIONES (AUTORES / CATEGORÍAS) =========
         JPanel pListas = new JPanel(new GridLayout(1, 2, 10, 10));
         pListas.setBorder(BorderFactory.createTitledBorder("Relaciones"));
 
@@ -103,12 +115,33 @@ public class LibroForm extends JFrame {
         pListas.add(boxAutores);
         pListas.add(boxCategorias);
 
-        add(pListas, BorderLayout.CENTER);
+        // ========= PANEL FORMULARIO (DATOS + RELACIONES) =========
+        JPanel pFormulario = new JPanel(new BorderLayout(8, 8));
+        pFormulario.setBorder(BorderFactory.createTitledBorder("Formulario de libro"));
+        pFormulario.add(pDatos, BorderLayout.NORTH);
+        pFormulario.add(pListas, BorderLayout.CENTER);
 
-        // Panel inferior (tabla + botones)
+        // ========= PANEL BUSCADOR + TABLA + BOTONES =========
         JPanel pBottom = new JPanel(new BorderLayout(8, 8));
+        pBottom.setBorder(BorderFactory.createTitledBorder("Catálogo de libros"));
 
-        String[] cols = {"ID", "Título", "Editorial", "Año", "Idioma", "Autores", "Categorías", "Estado"};
+        // --- Panel de búsqueda ---
+        JPanel pBusqueda = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        pBusqueda.setBorder(BorderFactory.createTitledBorder("Buscar por título del libro"));
+
+        txtBuscar = new JTextField(25);
+        chkSoloDisponibles = new JCheckBox("Solo con copias disponibles");
+        btnBuscar = new JButton("Buscar");
+
+        pBusqueda.add(new JLabel("Título:"));
+        pBusqueda.add(txtBuscar);
+        pBusqueda.add(chkSoloDisponibles);
+        pBusqueda.add(btnBuscar);
+
+        pBottom.add(pBusqueda, BorderLayout.NORTH);
+
+        // --- Tabla de catálogo (usando vw_CatalogoLibros) ---
+        String[] cols = {"ID", "Título", "Editorial", "Año", "Idioma", "Autores", "Categorías", "Disp.", "Estado"};
         modelo = new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
@@ -122,6 +155,7 @@ public class LibroForm extends JFrame {
 
         pBottom.add(new JScrollPane(tabla), BorderLayout.CENTER);
 
+        // --- Botones CRUD ---
         JPanel pBtns = new JPanel(new FlowLayout(FlowLayout.LEFT));
         btnNuevo = new JButton("Nuevo");
         btnGuardar = new JButton("Guardar");
@@ -133,16 +167,34 @@ public class LibroForm extends JFrame {
         pBtns.add(btnEliminar); pBtns.add(btnRefrescar); pBtns.add(btnCerrar);
 
         pBottom.add(pBtns, BorderLayout.SOUTH);
-        add(pBottom, BorderLayout.SOUTH);
 
-        // Eventos
+        // ========= SPLITPANE PARA SEPARAR FORMULARIO Y TABLA =========
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, pFormulario, pBottom);
+        split.setResizeWeight(0.45);        // 45% arriba, 55% abajo aprox.
+        split.setOneTouchExpandable(true);  // flechitas para ajustar
+        add(split, BorderLayout.CENTER);
+
+        // ========= EVENTOS =========
         btnNuevo.addActionListener(e -> limpiarFormulario());
         btnGuardar.addActionListener(e -> guardarLibro());
         btnEditar.addActionListener(e -> cargarSeleccionado());
         btnEliminar.addActionListener(e -> eliminarLibro());
         btnRefrescar.addActionListener(e -> cargarTabla());
         btnCerrar.addActionListener(e -> dispose());
+        btnBuscar.addActionListener(e -> cargarTabla());  // usa texto y check de búsqueda actuales
+
+        // Enter en el buscador también dispara la búsqueda
+        txtBuscar.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    cargarTabla();
+                }
+            }
+        });
     }
+
+    // =================== CARGA DE DATOS ===================
 
     private void cargarCombosYListas() {
         try {
@@ -166,22 +218,33 @@ public class LibroForm extends JFrame {
         }
     }
 
+    /**
+     * Carga la tabla usando la vista vw_CatalogoLibros (método buscarLibrosCatalogo),
+     * que ya trae Título, Editorial, Autores, Categorías y disponibilidad en una sola consulta.
+     */
     private void cargarTabla() {
+        String texto = txtBuscar != null ? txtBuscar.getText().trim() : "";
+        boolean soloDisp = chkSoloDisponibles != null && chkSoloDisponibles.isSelected();
+
         try {
             modelo.setRowCount(0);
-            // Para mostrar autores/categorías en tabla, haremos consultas por libro (sencillo y claro)
-            for (Libro l : dao.listarTodos()) {
-                String autores = joinNombresAutores(l.getId());
-                String categorias = joinNombresCategorias(l.getId());
-                modelo.addRow(new Object[]{
+
+            // Una sola consulta para todo el catálogo (con o sin filtro)
+            List<LibroBusqueda> lista = dao.buscarLibrosCatalogo(texto, soloDisp);
+
+            for (LibroBusqueda l : lista) {
+                String estado = l.getCopiasDisponibles() > 0 ? "Disponible" : "Sin stock";
+
+                modelo.addRow(new Object[] {
                         l.getId(),
                         l.getTitulo(),
-                        l.getEditorialNombre(),
+                        l.getEditorial(),
                         l.getAnio(),
                         l.getIdioma(),
-                        autores,
-                        categorias,
-                        l.isActivo() ? "Activo" : "Inactivo"
+                        l.getAutores(),
+                        l.getCategorias(),
+                        l.getCopiasDisponibles(),
+                        estado
                 });
             }
         } catch (SQLException ex) {
@@ -190,30 +253,7 @@ public class LibroForm extends JFrame {
         }
     }
 
-    private String joinNombresAutores(int idLibro) throws SQLException {
-        List<Integer> ids = dao.getAutoresIdsPorLibro(idLibro);
-        if (ids.isEmpty()) return "";
-        // Reutilizamos el modelo del JList (ya cargado) para mapear id->nombre
-        DefaultListModel<Autor> m = (DefaultListModel<Autor>) lstAutores.getModel();
-        List<String> nombres = new ArrayList<>();
-        for (int i = 0; i < m.size(); i++) {
-            Autor a = m.getElementAt(i);
-            if (ids.contains(a.getId())) nombres.add(a.getNombre());
-        }
-        return String.join(", ", nombres);
-    }
-
-    private String joinNombresCategorias(int idLibro) throws SQLException {
-        List<Integer> ids = dao.getCategoriasIdsPorLibro(idLibro);
-        if (ids.isEmpty()) return "";
-        DefaultListModel<Categoria> m = (DefaultListModel<Categoria>) lstCategorias.getModel();
-        List<String> nombres = new ArrayList<>();
-        for (int i = 0; i < m.size(); i++) {
-            Categoria c = m.getElementAt(i);
-            if (ids.contains(c.getId())) nombres.add(c.getNombre());
-        }
-        return String.join(", ", nombres);
-    }
+    // =================== FORMULARIO ===================
 
     private void limpiarFormulario() {
         txtId.setText("");
@@ -235,38 +275,73 @@ public class LibroForm extends JFrame {
         String titulo = txtTitulo.getText().trim();
         if (titulo.isEmpty()) {
             JOptionPane.showMessageDialog(this, "Ingresa el título.", "Validación", JOptionPane.WARNING_MESSAGE);
-            txtTitulo.requestFocus(); return;
+            txtTitulo.requestFocus();
+            return;
         }
+        if (titulo.length() > 200) {
+            JOptionPane.showMessageDialog(this, "El título es demasiado largo (máx. 200 caracteres).", "Validación", JOptionPane.WARNING_MESSAGE);
+            txtTitulo.requestFocus();
+            return;
+        }
+
+        int anio = (Integer) spAnio.getValue();
+        if (anio <= 0) {
+            JOptionPane.showMessageDialog(this, "Ingresa un año válido.", "Validación", JOptionPane.WARNING_MESSAGE);
+            spAnio.requestFocus();
+            return;
+        }
+
+        int stockMin = (Integer) spStockMin.getValue();
+        if (stockMin < 0) {
+            JOptionPane.showMessageDialog(this, "El stock mínimo no puede ser negativo.", "Validación", JOptionPane.WARNING_MESSAGE);
+            spStockMin.requestFocus();
+            return;
+        }
+
+        Editorial selEd = (Editorial) cmbEditorial.getSelectedItem();
+        if (selEd == null) {
+            JOptionPane.showMessageDialog(this, "Selecciona una editorial.", "Validación", JOptionPane.WARNING_MESSAGE);
+            cmbEditorial.requestFocus();
+            return;
+        }
+
+        // Autores/Categorías seleccionados
+        List<Autor> autoresSel = lstAutores.getSelectedValuesList();
+        if (autoresSel == null || autoresSel.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Selecciona al menos un autor.", "Validación", JOptionPane.WARNING_MESSAGE);
+            lstAutores.requestFocus();
+            return;
+        }
+
+        List<Integer> autoresIds = autoresSel.stream().map(Autor::getId).collect(Collectors.toList());
+        List<Integer> categoriasIds = lstCategorias.getSelectedValuesList()
+                .stream().map(Categoria::getId).collect(Collectors.toList());
 
         try {
             Libro l = new Libro();
             l.setTitulo(titulo);
             l.setIsbn(txtISBN.getText().trim());
             l.setEdicion(txtEdicion.getText().trim());
-            l.setAnio((Integer) spAnio.getValue());
+            l.setAnio(anio);
             l.setIdioma(txtIdioma.getText().trim());
-            l.setStockMinimo((Integer) spStockMin.getValue());
+            l.setStockMinimo(stockMin);
             l.setActivo(chkActivo.isSelected());
-
-            Editorial selEd = (Editorial) cmbEditorial.getSelectedItem();
-            l.setIdEditorial(selEd != null ? selEd.getId() : null);
-
-            // Autores/Categorías seleccionados
-            List<Integer> autoresIds = lstAutores.getSelectedValuesList()
-                    .stream().map(Autor::getId).collect(Collectors.toList());
-            List<Integer> categoriasIds = lstCategorias.getSelectedValuesList()
-                    .stream().map(Categoria::getId).collect(Collectors.toList());
+            l.setIdEditorial(selEd.getId());
 
             if (modoEdicion) {
+                // ACTUALIZAR
                 l.setId(Integer.parseInt(txtId.getText()));
                 dao.actualizar(l, autoresIds, categoriasIds);
                 JOptionPane.showMessageDialog(this, "Libro actualizado correctamente.");
             } else {
+                // CREAR NUEVO
                 int nuevoId = dao.crear(l, autoresIds, categoriasIds);
-                txtId.setText(String.valueOf(nuevoId));
                 JOptionPane.showMessageDialog(this, "Libro creado correctamente. ID=" + nuevoId);
-                modoEdicion = true;
+                // Tras crear, limpiar todo y volver a modo "nuevo"
+                limpiarFormulario();
             }
+
+            // Recargar catálogo con los filtros actuales
             cargarTabla();
 
         } catch (SQLException ex) {

@@ -1,95 +1,88 @@
-package app.dao; // Paquete 'dao'
+package app.dao;
 
-import app.db.Conexion; // Usando 'db.Conexion'
-import model.Reserva; // Usando 'model.Reserva'
+import app.db.Conexion;
+import model.Reserva;
 
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * DAO para el Módulo E: Reservas.
- * Sigue el formato de MultaDAO (mapeador y PreparedStatement).
+ * DAO para Reservas sobre la tabla dbo.Reservas.
  */
 public class ReservaDAO {
 
     /**
-     * Crea una nueva reserva[cite: 36].
-     * Este método debe ser transaccional para calcular la 'posicionCola'[cite: 85].
-     * Esta es la única "lógica compleja" que debe estar en el DAO
-     * si no hay capa de servicio, para garantizar la integridad de la cola.
+     * Crea una nueva reserva.
+     * Usamos:
+     *  - CreadoUtc = GETUTCDATE()
+     *  - Estado    = 'PENDIENTE'
+     *  - IdCopia   = NULL (es una reserva por libro, no por copia específica)
      */
     public boolean crearReserva(int idCliente, int idLibro) throws SQLException {
 
-        String sqlPosicion = "SELECT ISNULL(MAX(posicionCola), 0) + 1 FROM Reserva WHERE idLibro = ? AND estado = 'Pendiente'";
-        String sqlInsert = "INSERT INTO Reserva (idCliente, idLibro, fechaReserva, estado, posicionCola) " +
-                "VALUES (?, ?, GETDATE(), 'Pendiente', ?)";
+        // Regla: la reserva expira 24 horas después de creada (ajusta a días/horas que tú quieras)
+        String sqlInsert = """
+        INSERT INTO dbo.Reservas (IdCliente, IdLibro, IdCopia, CreadoUtc, ExpiraUtc, Estado, Notas)
+        VALUES (?, ?, NULL, GETUTCDATE(), DATEADD(HOUR, 24, GETUTCDATE()), 'PENDIENTE', NULL)
+    """;
 
-        Connection conn = null;
-        try {
-            conn = Conexion.getConnection();
-            conn.setAutoCommit(false); // 1. Iniciar transacción
+        try (Connection conn = Conexion.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sqlInsert)) {
 
-            int proximaPosicion;
+            pstmt.setInt(1, idCliente);
+            pstmt.setInt(2, idLibro);
 
-            // 2. Calcular la siguiente posición
-            try (PreparedStatement pstmtPos = conn.prepareStatement(sqlPosicion)) {
-                pstmtPos.setInt(1, idLibro);
-                try (ResultSet rs = pstmtPos.executeQuery()) {
-                    proximaPosicion = rs.next() ? rs.getInt(1) : 1;
-                }
-            }
-
-            // 3. Insertar la reserva
-            try (PreparedStatement pstmtInsert = conn.prepareStatement(sqlInsert)) {
-                pstmtInsert.setInt(1, idCliente);
-                pstmtInsert.setInt(2, idLibro);
-                pstmtInsert.setInt(3, proximaPosicion);
-
-                int filasAfectadas = pstmtInsert.executeUpdate();
-
-                if (filasAfectadas > 0) {
-                    conn.commit(); // 4. Confirmar transacción
-                    return true;
-                } else {
-                    conn.rollback();
-                    return false;
-                }
-            }
-        } catch (SQLException e) {
-            System.err.println("Error al crear reserva (transacción): " + e.getMessage());
-            if (conn != null) conn.rollback(); // 4c. Revertir en caso de excepción
-            throw e; // Relanzar la excepción para que el controlador la vea
-        } finally {
-            if (conn != null) {
-                conn.setAutoCommit(true); // 5. Restaurar modo auto-commit
-                conn.close(); // 6. Cerrar conexión
-            }
+            int filas = pstmt.executeUpdate();
+            return filas > 0;
         }
     }
 
     /**
-     * Actualiza el estado de una reserva (Ej: "Expirada", "Completada", "Cancelada").
+     * Actualiza el estado de una reserva (Ej: "EXPIRADA", "COMPLETADA", "CANCELADA").
+     * Si quieres también podrías setear ExpiraUtc aquí según el negocio.
      */
     public boolean actualizarEstadoReserva(int idReserva, String nuevoEstado) throws SQLException {
-        String sql = "UPDATE Reserva SET estado = ? WHERE idReserva = ?";
+        String sql = """
+            UPDATE dbo.Reservas
+            SET Estado = ?
+            WHERE Id = ?
+        """;
 
         try (Connection conn = Conexion.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setString(1, nuevoEstado);
             pstmt.setInt(2, idReserva);
-
             return pstmt.executeUpdate() > 0;
         }
     }
 
     /**
-     * Lista las reservas activas (pendientes) de un cliente específico[cite: 58].
+     * Lista las reservas PENDIENTES de un cliente.
+     * Calcula PosicionCola usando ROW_NUMBER() por libro, ordenado por CreadoUtc.
      */
     public List<Reserva> listarReservasPendientesPorCliente(int idCliente) throws SQLException {
         List<Reserva> reservas = new ArrayList<>();
-        String sql = "SELECT * FROM Reserva WHERE idCliente = ? AND estado = 'Pendiente' ORDER BY fechaReserva";
+
+        String sql = """
+            SELECT
+                r.Id,
+                r.IdCliente,
+                r.IdLibro,
+                r.IdCopia,
+                r.CreadoUtc,
+                r.ExpiraUtc,
+                r.Estado,
+                r.Notas,
+                ROW_NUMBER() OVER(
+                    PARTITION BY r.IdLibro
+                    ORDER BY r.CreadoUtc
+                ) AS PosicionCola
+            FROM dbo.Reservas r
+            WHERE r.IdCliente = ? AND r.Estado = 'PENDIENTE'
+            ORDER BY r.CreadoUtc
+        """;
 
         try (Connection conn = Conexion.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -106,10 +99,14 @@ public class ReservaDAO {
     }
 
     /**
-     * Verifica si existe una reserva activa (pendiente) para un libro[cite: 72].
+     * Verifica si existe al menos una reserva pendiente para un libro.
      */
     public boolean existeReservaPendiente(int idLibro) throws SQLException {
-        String sql = "SELECT COUNT(idReserva) FROM Reserva WHERE idLibro = ? AND estado = 'Pendiente'";
+        String sql = """
+            SELECT COUNT(Id)
+            FROM dbo.Reservas
+            WHERE IdLibro = ? AND Estado = 'PENDIENTE'
+        """;
 
         try (Connection conn = Conexion.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -117,27 +114,43 @@ public class ReservaDAO {
             pstmt.setInt(1, idLibro);
 
             try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getInt(1) > 0;
-                }
+                return rs.next() && rs.getInt(1) > 0;
             }
         }
-        return false;
     }
 
     // --- Helper ---
 
-    /**
-     * Metodo helper para convertir un ResultSet en un objeto Reserva.
-     */
     private Reserva mapearResultSet(ResultSet rs) throws SQLException {
         Reserva r = new Reserva();
-        r.setIdReserva(rs.getInt("idReserva"));
-        r.setIdCliente(rs.getInt("idCliente"));
-        r.setIdLibro(rs.getInt("idLibro"));
-        r.setFechaReserva(rs.getTimestamp("fechaReserva"));
-        r.setEstado(rs.getString("estado"));
-        r.setPosicionCola(rs.getInt("posicionCola"));
+        r.setIdReserva(rs.getInt("Id"));
+        r.setIdCliente(rs.getInt("IdCliente"));
+        r.setIdLibro(rs.getInt("IdLibro"));
+
+        int idCopia = rs.getInt("IdCopia");
+        r.setIdCopia(rs.wasNull() ? null : idCopia);
+
+        Timestamp creado = rs.getTimestamp("CreadoUtc");
+        if (creado != null) {
+            r.setFechaCreado(new java.util.Date(creado.getTime()));
+        }
+
+        Timestamp expira = rs.getTimestamp("ExpiraUtc");
+        if (expira != null) {
+            r.setFechaExpira(new java.util.Date(expira.getTime()));
+        }
+
+        r.setEstado(rs.getString("Estado"));
+        r.setNotas(rs.getString("Notas"));
+
+        // Campo calculado
+        try {
+            int pos = rs.getInt("PosicionCola");
+            if (!rs.wasNull()) r.setPosicionCola(pos);
+        } catch (SQLException ignore) {
+            // Si la consulta no trae PosicionCola, simplemente se queda en 0
+        }
+
         return r;
     }
 }

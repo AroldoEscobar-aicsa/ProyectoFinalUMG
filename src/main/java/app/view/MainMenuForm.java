@@ -21,6 +21,7 @@ public class MainMenuForm extends JFrame {
     private JButton btnPrestamos;
     private JButton btnUsuarios;
     private JButton btnSalir;
+    private JButton btnEditoriales;
 
     // Nuevos módulos
     private JButton btnReservas;
@@ -98,6 +99,7 @@ public class MainMenuForm extends JFrame {
         btnPrestamos = createTileButton("Préstamos", "Préstamos y devoluciones", "🔁");
         btnUsuarios  = createTileButton("Usuarios", "Administración del sistema", "🛡️");
         btnSalir     = createTileButton("Cerrar Sesión", "Finalizar y volver al login", "🚪");
+        btnEditoriales = createTileButton("Editoriales", "Catálogo de editoriales", "🏢");
 
         // Botones nuevos (Cliente)
         btnReservas          = createTileButton("Reservas", "Gestión de reservas", "📅");
@@ -106,7 +108,7 @@ public class MainMenuForm extends JFrame {
 
         // Botones nuevos (Bibliotecario)
         btnCategorias            = createTileButton("Categorías", "Gestión de categorías", "🏷️");
-        btnPrestamosDevoluciones = createTileButton("Préstamos/Devoluciones", "Operaciones de circulación", "🔄");
+        //btnPrestamosDevoluciones = createTileButton("Préstamos/Devoluciones", "Operaciones de circulación", "🔄");
         btnInventarioFisico      = createTileButton("Inventario físico", "Conteos, ajustes y stock", "📦");
         btnReportesOperativos    = createTileButton("Reportes operativos", "Movimientos diarios", "📊");
 
@@ -122,13 +124,14 @@ public class MainMenuForm extends JFrame {
         tiles.add(btnLibros);
         tiles.add(btnClientes);
         tiles.add(btnPrestamos);
+        tiles.add(btnEditoriales);
 
         tiles.add(btnReservas);
         tiles.add(btnMultasPendientes);
         tiles.add(btnBusquedaLibros);
         tiles.add(btnCategorias);
 
-        tiles.add(btnPrestamosDevoluciones);
+        //tiles.add(btnPrestamosDevoluciones);
         tiles.add(btnInventarioFisico);
         tiles.add(btnReportesOperativos);
         tiles.add(btnMultas);
@@ -210,7 +213,7 @@ public class MainMenuForm extends JFrame {
         btnBusquedaLibros.setEnabled(false);
 
         btnCategorias.setEnabled(false);
-        btnPrestamosDevoluciones.setEnabled(false);
+        //btnPrestamosDevoluciones.setEnabled(false);
         btnInventarioFisico.setEnabled(false);
         btnReportesOperativos.setEnabled(false);
 
@@ -231,13 +234,14 @@ public class MainMenuForm extends JFrame {
                 btnClientes.setEnabled(true);
                 btnPrestamos.setEnabled(true);
                 btnUsuarios.setEnabled(true);
+                btnEditoriales.setEnabled(true);
 
                 btnReservas.setEnabled(true);
                 btnMultasPendientes.setEnabled(true);
                 btnBusquedaLibros.setEnabled(true);
 
                 btnCategorias.setEnabled(true);
-                btnPrestamosDevoluciones.setEnabled(true);
+                //btnPrestamosDevoluciones.setEnabled(true);
                 btnInventarioFisico.setEnabled(true);
                 btnReportesOperativos.setEnabled(true);
 
@@ -254,10 +258,11 @@ public class MainMenuForm extends JFrame {
                 btnLibros.setEnabled(true);
                 btnCategorias.setEnabled(true);
                 btnPrestamos.setEnabled(true);              // opción general de préstamos
-                btnPrestamosDevoluciones.setEnabled(true);  // botón específico
+                //btnPrestamosDevoluciones.setEnabled(true);  // botón específico
                 btnReservas.setEnabled(true);
                 btnInventarioFisico.setEnabled(true);
                 btnReportesOperativos.setEnabled(true);
+                btnEditoriales.setEnabled(true);
                 break;
 
             case "FINANCIERO":
@@ -335,25 +340,46 @@ public class MainMenuForm extends JFrame {
                 showInfo("Módulo \"Búsqueda de libros\" aún no implementado.")
         );
 
-        btnCategorias.addActionListener(e ->
-                showInfo("Módulo \"Categorías\" aún no implementado.")
-        );
+        btnCategorias.addActionListener(e -> {
+            try {
+                new CategoriaForm().setVisible(true);
+            } catch (Throwable ex) {
+                showError("No se pudo abrir Categorías: " + ex.getMessage());
+            }
+        });
 
-        btnPrestamosDevoluciones.addActionListener(e ->
-                showInfo("Módulo \"Préstamos / Devoluciones\" aún no implementado.")
-        );
+        //btnPrestamosDevoluciones.addActionListener(e ->
+        //showInfo("Módulo \"Préstamos / Devoluciones\" aún no implementado.")
+        //);
 
-        btnInventarioFisico.addActionListener(e ->
-                showInfo("Módulo \"Inventario físico\" aún no implementado.")
-        );
+        // Antes tenías solo un showInfo("no implementado")
+        btnInventarioFisico.addActionListener(e -> {
+            try {
+                new InventarioFisicoForm(usuario).setVisible(true);
+            } catch (Throwable ex) {
+                showError("No se pudo abrir Inventario físico: " + ex.getMessage());
+            }
+        });
+
+        btnEditoriales.addActionListener(e -> {
+            try {
+                new EditorialForm().setVisible(true);
+            } catch (Throwable ex) {
+                showError("No se pudo abrir Editoriales: " + ex.getMessage());
+            }
+        });
 
         btnReportesOperativos.addActionListener(e ->
                 showInfo("Módulo \"Reportes operativos\" aún no implementado.")
         );
 
-        btnMultas.addActionListener(e ->
-                showInfo("Módulo \"Multas\" aún no implementado.")
-        );
+        btnMultas.addActionListener(e -> {
+            try {
+                new MultaForm().setVisible(true);
+            } catch (Throwable ex) {
+                showError("No se pudo abrir Editoriales: " + ex.getMessage());
+            }
+        });
 
         btnCajaDiaria.addActionListener(e ->
                 showInfo("Módulo \"Caja diaria\" aún no implementado.")

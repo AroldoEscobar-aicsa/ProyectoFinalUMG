@@ -1,27 +1,36 @@
 package app.model;
 
 import java.time.LocalDate;
- /* Representa una multa generada (una cuenta por cobrar).
- El cálculo del monto se basa en reglas de negocio (ParametroDAO)
- pero se almacena aquí una vez generado.*/
 
+/**
+ * Representa una multa generada (cuenta por cobrar).
+ * En la BD se almacena en dbo.Multas:
+ *  - Monto     -> montoCalculado
+ *  - Estado    -> estado (PENDIENTE / PAGADA / EXONERADA)
+ *  - Justificacion -> justificacionExoneracion
+ *  - CreadoUtc -> fechaGeneracion (solo fecha)
+ *  - PagadoUtc -> fechaLimitePago (solo fecha, si aplica)
+ *
+ * Campos como diasAtraso y montoPagado son de lógica de negocio,
+ * no existen como columnas físicas.
+ */
 public class Multa {
     private int idMulta;
     private int idPrestamo; // El préstamo que originó la multa
     private int idCliente;  // El cliente deudor
 
-    private LocalDate fechaGeneracion;
-    private int diasAtraso;
-    private double montoCalculado; // Monto total según las reglas (tarifa * días, con tope)
-    private double montoPagado;    // Suma de todos los pagos realizados
-    private String estado; // "Pendiente", "Pagada", "Exonerada"
-    private LocalDate fechaLimitePago;
-    private String justificacionExoneracion; // Requerido si estado="Exonerada"
+    private LocalDate fechaGeneracion;   // CreadoUtc (solo fecha)
+    private int diasAtraso;              // No está en la BD (puedes calcularlo si luego tienes fecha vencimiento)
+    private double montoCalculado;       // Columna Monto
+    private double montoPagado;          // Derivado: 0 si PENDIENTE, = montoCalculado si pagada/exonerada
+    private String estado;               // "PENDIENTE", "PAGADA", "EXONERADA"
+    private LocalDate fechaLimitePago;   // Usamos PagadoUtc como fecha de pago/histórico
+    private String justificacionExoneracion; // Columna Justificacion
 
     // Constructor
     public Multa() {
         this.montoPagado = 0.0;
-        this.estado = "Pendiente";
+        this.estado = "PENDIENTE"; // coherente con la tabla y su CHECK
     }
 
     // --- Getters y Setters ---

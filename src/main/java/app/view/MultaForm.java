@@ -6,9 +6,7 @@ import app.model.Multa;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.*;
 import java.sql.SQLException;
-import java.time.LocalDate;
 import java.util.List;
 
 public class MultaForm extends JFrame {
@@ -37,8 +35,17 @@ public class MultaForm extends JFrame {
         add(panelMain);
 
         // --- TABLA ---
-        String[] columnas = {"ID", "Cliente", "Préstamo", "Fecha", "Días Atraso", "Monto", "Pagado", "Estado"};
-        modeloTabla = new DefaultTableModel(columnas, 0);
+        String[] columnas = {
+                "ID", "Cliente", "Préstamo", "Fecha", "Días Atraso",
+                "Monto", "Pagado", "Estado"
+        };
+        modeloTabla = new DefaultTableModel(columnas, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+
         tablaMultas = new JTable(modeloTabla);
         JScrollPane scroll = new JScrollPane(tablaMultas);
         panelMain.add(scroll, BorderLayout.CENTER);
@@ -94,9 +101,9 @@ public class MultaForm extends JFrame {
                         m.getIdCliente(),
                         m.getIdPrestamo(),
                         m.getFechaGeneracion(),
-                        m.getDiasAtraso(),
+                        m.getDiasAtraso(),       // hoy siempre 0 porque no está en la BD
                         m.getMontoCalculado(),
-                        m.getMontoPagado(),
+                        m.getMontoPagado(),      // derivado: 0 si pendiente, monto si pagada/exonerada
                         m.getEstado()
                 });
             }
@@ -112,14 +119,21 @@ public class MultaForm extends JFrame {
             modeloTabla.setRowCount(0);
             if (m != null) {
                 modeloTabla.addRow(new Object[]{
-                        m.getIdMulta(), m.getIdCliente(), m.getIdPrestamo(),
-                        m.getFechaGeneracion(), m.getDiasAtraso(),
-                        m.getMontoCalculado(), m.getMontoPagado(), m.getEstado()
+                        m.getIdMulta(),
+                        m.getIdCliente(),
+                        m.getIdPrestamo(),
+                        m.getFechaGeneracion(),
+                        m.getDiasAtraso(),
+                        m.getMontoCalculado(),
+                        m.getMontoPagado(),
+                        m.getEstado()
                 });
             } else {
                 mostrarInfo("No se encontró ninguna multa con ese ID.");
             }
-        } catch (Exception ex) {
+        } catch (NumberFormatException ex) {
+            mostrarError("El ID de la multa debe ser numérico.");
+        } catch (SQLException ex) {
             mostrarError("Error al buscar multa: " + ex.getMessage());
         }
     }
@@ -135,17 +149,29 @@ public class MultaForm extends JFrame {
                 return;
             }
 
-            double nuevoTotal = multa.getMontoPagado() + monto;
-            String nuevoEstado = (nuevoTotal >= multa.getMontoCalculado()) ? "Pagada" : "Pendiente";
+            if (!"PENDIENTE".equalsIgnoreCase(multa.getEstado())) {
+                mostrarInfo("Solo se pueden registrar pagos de multas PENDIENTE.");
+                return;
+            }
 
-            boolean ok = multaDAO.actualizarPago(id, nuevoTotal, nuevoEstado);
+            if (monto < multa.getMontoCalculado()) {
+                mostrarInfo("El monto a pagar debe ser igual o mayor al monto de la multa (Q"
+                        + multa.getMontoCalculado() + ").");
+                return;
+            }
+
+            String nuevoEstado = "PAGADA";
+
+            boolean ok = multaDAO.actualizarPago(id, monto, nuevoEstado);
             if (ok) {
                 mostrarInfo("Pago registrado correctamente.");
                 cargarMultasPendientes();
             } else {
                 mostrarError("No se pudo registrar el pago.");
             }
-        } catch (Exception ex) {
+        } catch (NumberFormatException ex) {
+            mostrarError("ID de multa y monto deben ser numéricos.");
+        } catch (SQLException ex) {
             mostrarError("Error al registrar pago: " + ex.getMessage());
         }
     }
@@ -166,7 +192,9 @@ public class MultaForm extends JFrame {
             } else {
                 mostrarError("No se pudo exonerar la multa.");
             }
-        } catch (Exception ex) {
+        } catch (NumberFormatException ex) {
+            mostrarError("El ID de la multa debe ser numérico.");
+        } catch (SQLException ex) {
             mostrarError("Error al exonerar multa: " + ex.getMessage());
         }
     }

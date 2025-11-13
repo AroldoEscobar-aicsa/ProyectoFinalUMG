@@ -19,7 +19,10 @@ public class LibroDAO {
         try (Connection cn = Conexion.getConnection();
              PreparedStatement ps = cn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) lista.add(new Editorial(rs.getInt("Id"), rs.getString("Nombre")));
+            while (rs.next()) {
+                // Asumiendo que Editorial tiene constructor (int id, String nombre)
+                lista.add(new Editorial(rs.getInt("Id"), rs.getString("Nombre")));
+            }
         }
         return lista;
     }
@@ -34,7 +37,7 @@ public class LibroDAO {
                 app.model.Autor a = new app.model.Autor();
                 a.setId(rs.getInt("Id"));
                 a.setNombre(rs.getString("Nombre"));
-                a.setActivo(true);
+                a.setActivo(true); // sabemos que IsActive = 1
                 lista.add(a);
             }
         }
@@ -47,7 +50,13 @@ public class LibroDAO {
         try (Connection cn = Conexion.getConnection();
              PreparedStatement ps = cn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) lista.add(new Categoria(rs.getInt("Id"), rs.getString("Nombre")));
+            while (rs.next()) {
+                Categoria c = new Categoria();
+                c.setId(rs.getInt("Id"));
+                c.setNombre(rs.getString("Nombre"));
+                c.setActivo(true); // porque filtramos IsActive = 1
+                lista.add(c);
+            }
         }
         return lista;
     }

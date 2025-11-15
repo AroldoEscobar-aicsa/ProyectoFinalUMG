@@ -402,9 +402,13 @@ public class MainMenuForm extends JFrame {
         //      showInfo("Módulo \"Caja diaria\" aún no implementado.")
         //);
 
-        btnRecaudacion.addActionListener(e ->
-                showInfo("Módulo \"Recaudación\" aún no implementado.")
-        );
+        btnRecaudacion.addActionListener(e -> {
+            try {
+                new AdquisicionesForm().setVisible(true);
+            } catch (Throwable ex) {
+                showError("No se pudo abrir Adquisiciones: " + ex.getMessage());
+            }
+        });
 
         btnReportesFinancieros.addActionListener(e -> {
             // Simplemente abre el nuevo formulario "Todo en Uno"

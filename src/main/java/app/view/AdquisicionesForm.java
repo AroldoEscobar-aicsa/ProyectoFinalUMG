@@ -1,226 +1,360 @@
 package app.view;
 
 import app.dao.AdquisicionesDAO;
-import app.model.Adquisiciones;
+import app.model.Proveedores;
+import app.model.SolicitudCompra;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.sql.SQLException;
-import java.util.Date;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 public class AdquisicionesForm extends JFrame {
 
-    private JTextField txtCodigo, txtProveedor, txtCategoria, txtDescripcion,
-            txtCantidad, txtCostoUnitario, txtEstado, txtId;
-    private JTable tabla;
-    private DefaultTableModel modeloTabla;
-    private AdquisicionesDAO adquisicionesDAO;
+    private final AdquisicionesDAO adquisicionesDAO = new AdquisicionesDAO();
 
-    public AdquisicionesForm() {
-        adquisicionesDAO = new AdquisicionesDAO();
+    // Usuario actual (bibliotecario / admin)
+    private final int idUsuarioActual;
+    private final String usernameActual;
+
+    // Campos para crear solicitud
+    private JTextField txtIdLibro;
+    private JTextField txtCantidadSolicitud;
+
+    // Tabla de solicitudes
+    private JTable tablaSolicitudes;
+    private DefaultTableModel modeloTabla;
+
+    // Panel de aprobación/compra
+    private JTextField txtIdSolicitudSeleccionada;
+    private JComboBox<Proveedores> cboProveedor;
+    private JTextField txtCostoUnitario;
+    private JTextField txtIdUbicacion;
+
+    private JButton btnCrearSolicitud;
+    private JButton btnAprobarSolicitud;
+    private JButton btnRegistrarCompra;
+    private JButton btnRefrescar;
+    private JButton btnCerrar;
+
+    // ==== Constructor principal (con usuario) ====
+    public AdquisicionesForm(int idUsuarioActual, String usernameActual) {
+        this.idUsuarioActual = idUsuarioActual;
+        this.usernameActual = usernameActual;
+
         initUI();
-        cargarDatosTabla();
+        cargarProveedores();
+        cargarSolicitudes();
+    }
+
+    // ==== Constructor sin parámetros (para tu llamada actual) ====
+    // Puedes luego cambiar los valores 1, "admin" por tu usuario real
+    public AdquisicionesForm() {
+        this(1, "admin");
     }
 
     private void initUI() {
-        setTitle("Gestión de Adquisiciones - Biblioteca");
-        setSize(950, 600);
+        setTitle("Adquisiciones y Solicitudes de Compra - Biblioteca");
+        setSize(1100, 650);
         setLocationRelativeTo(null);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout(10, 10));
 
-        // Panel superior con campos de entrada
-        JPanel panelForm = new JPanel(new GridLayout(6, 4, 8, 8));
-        panelForm.setBorder(BorderFactory.createTitledBorder("Datos de la Adquisición"));
+        // ------------------ PANEL SUPERIOR: CREAR SOLICITUD ------------------
+        JPanel panelSolicitud = new JPanel(new GridBagLayout());
+        panelSolicitud.setBorder(BorderFactory.createTitledBorder("Crear Solicitud de Compra"));
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(4, 4, 4, 4);
+        g.fill = GridBagConstraints.HORIZONTAL;
 
-        txtId = new JTextField();
-        txtId.setEnabled(false);
-        txtCodigo = new JTextField();
-        txtProveedor = new JTextField();
-        txtCategoria = new JTextField();
-        txtDescripcion = new JTextField();
-        txtCantidad = new JTextField();
+        txtIdLibro = new JTextField();
+        txtCantidadSolicitud = new JTextField();
+
+        btnCrearSolicitud = new JButton("Crear solicitud");
+
+        g.gridx = 0; g.gridy = 0;
+        panelSolicitud.add(new JLabel("Id Libro:"), g);
+        g.gridx = 1; g.weightx = 1;
+        panelSolicitud.add(txtIdLibro, g);
+
+        g.gridx = 2; g.gridy = 0; g.weightx = 0;
+        panelSolicitud.add(new JLabel("Cantidad:"), g);
+        g.gridx = 3; g.weightx = 1;
+        panelSolicitud.add(txtCantidadSolicitud, g);
+
+        g.gridx = 4; g.gridy = 0; g.weightx = 0;
+        panelSolicitud.add(btnCrearSolicitud, g);
+
+        // ------------------ PANEL CENTRAL: TABLA SOLICITUDES ------------------
+        String[] cols = {
+                "IdSolicitud", "Libro", "Cantidad", "Estado",
+                "Solicitante", "Aprobador",
+                "Creado", "Aprobado"
+        };
+        modeloTabla = new DefaultTableModel(cols, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
+        };
+        tablaSolicitudes = new JTable(modeloTabla);
+        tablaSolicitudes.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        JScrollPane scrollTabla = new JScrollPane(tablaSolicitudes);
+
+        // ------------------ PANEL INFERIOR: APROBACIÓN Y COMPRA ------------------
+        JPanel panelAcciones = new JPanel(new GridBagLayout());
+        panelAcciones.setBorder(BorderFactory.createTitledBorder("Aprobación y Registro de Compra"));
+        GridBagConstraints a = new GridBagConstraints();
+        a.insets = new Insets(4, 4, 4, 4);
+        a.fill = GridBagConstraints.HORIZONTAL;
+
+        txtIdSolicitudSeleccionada = new JTextField();
+        txtIdSolicitudSeleccionada.setEditable(false);
+
+        cboProveedor = new JComboBox<>();
         txtCostoUnitario = new JTextField();
-        txtEstado = new JTextField();
+        txtIdUbicacion = new JTextField();
 
-        panelForm.add(new JLabel("ID:"));
-        panelForm.add(txtId);
-        panelForm.add(new JLabel("Código Compra:"));
-        panelForm.add(txtCodigo);
-        panelForm.add(new JLabel("Proveedor:"));
-        panelForm.add(txtProveedor);
-        panelForm.add(new JLabel("Categoría:"));
-        panelForm.add(txtCategoria);
-        panelForm.add(new JLabel("Descripción:"));
-        panelForm.add(txtDescripcion);
-        panelForm.add(new JLabel("Cantidad:"));
-        panelForm.add(txtCantidad);
-        panelForm.add(new JLabel("Costo Unitario:"));
-        panelForm.add(txtCostoUnitario);
-        panelForm.add(new JLabel("Estado:"));
-        panelForm.add(txtEstado);
+        btnAprobarSolicitud = new JButton("Aprobar solicitud");
+        btnRegistrarCompra = new JButton("Registrar compra (crear copias)");
+        btnRefrescar = new JButton("Refrescar");
+        btnCerrar = new JButton("Cerrar");
 
-        // Panel de botones
-        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        JButton btnGuardar = new JButton("Guardar");
-        JButton btnActualizar = new JButton("Actualizar");
-        JButton btnEliminar = new JButton("Eliminar");
-        JButton btnLimpiar = new JButton("Limpiar");
+        int row = 0;
+        a.gridx = 0; a.gridy = row;
+        panelAcciones.add(new JLabel("Id Solicitud seleccionada:"), a);
+        a.gridx = 1; a.weightx = 1;
+        panelAcciones.add(txtIdSolicitudSeleccionada, a);
 
-        panelBotones.add(btnGuardar);
-        panelBotones.add(btnActualizar);
-        panelBotones.add(btnEliminar);
-        panelBotones.add(btnLimpiar);
+        row++;
+        a.gridx = 0; a.gridy = row; a.weightx = 0;
+        panelAcciones.add(new JLabel("Proveedor:"), a);
+        a.gridx = 1; a.weightx = 1;
+        panelAcciones.add(cboProveedor, a);
 
-        // Tabla
-        modeloTabla = new DefaultTableModel(new Object[]{
-                "ID", "Código", "Proveedor", "Categoría", "Descripción",
-                "Cantidad", "Costo Unitario", "Total", "Estado"
-        }, 0);
-        tabla = new JTable(modeloTabla);
-        JScrollPane scrollTabla = new JScrollPane(tabla);
+        row++;
+        a.gridx = 0; a.gridy = row; a.weightx = 0;
+        panelAcciones.add(new JLabel("Costo unitario (Q):"), a);
+        a.gridx = 1; a.weightx = 1;
+        panelAcciones.add(txtCostoUnitario, a);
 
-        add(panelForm, BorderLayout.NORTH);
+        row++;
+        a.gridx = 0; a.gridy = row; a.weightx = 0;
+        panelAcciones.add(new JLabel("Id Ubicación (Ubicaciones.Id):"), a);
+        a.gridx = 1; a.weightx = 1;
+        panelAcciones.add(txtIdUbicacion, a);
+
+        row++;
+        a.gridx = 0; a.gridy = row; a.gridwidth = 2;
+        JPanel panelBotonesAccion = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        panelBotonesAccion.add(btnAprobarSolicitud);
+        panelBotonesAccion.add(btnRegistrarCompra);
+        panelBotonesAccion.add(btnRefrescar);
+        panelBotonesAccion.add(btnCerrar);
+        panelAcciones.add(panelBotonesAccion, a);
+
+        // ------------------ ARMAR FRAME ------------------
+        add(panelSolicitud, BorderLayout.NORTH);
         add(scrollTabla, BorderLayout.CENTER);
-        add(panelBotones, BorderLayout.SOUTH);
+        add(panelAcciones, BorderLayout.SOUTH);
 
-        // Eventos
-        btnGuardar.addActionListener(e -> guardarAdquisicion());
-        btnActualizar.addActionListener(e -> actualizarAdquisicion());
-        btnEliminar.addActionListener(e -> eliminarAdquisicion());
-        btnLimpiar.addActionListener(e -> limpiarCampos());
+        // ------------------ EVENTOS ------------------
 
-        tabla.addMouseListener(new MouseAdapter() {
+        // Selección en la tabla -> mostrar IdSolicitud
+        tablaSolicitudes.addMouseListener(new MouseAdapter() {
+            @Override
             public void mouseClicked(MouseEvent e) {
-                int fila = tabla.getSelectedRow();
+                int fila = tablaSolicitudes.getSelectedRow();
                 if (fila >= 0) {
-                    txtId.setText(modeloTabla.getValueAt(fila, 0).toString());
-                    txtCodigo.setText(modeloTabla.getValueAt(fila, 1).toString());
-                    txtProveedor.setText(modeloTabla.getValueAt(fila, 2).toString());
-                    txtCategoria.setText(modeloTabla.getValueAt(fila, 3).toString());
-                    txtDescripcion.setText(modeloTabla.getValueAt(fila, 4).toString());
-                    txtCantidad.setText(modeloTabla.getValueAt(fila, 5).toString());
-                    txtCostoUnitario.setText(modeloTabla.getValueAt(fila, 6).toString());
-                    txtEstado.setText(modeloTabla.getValueAt(fila, 8).toString());
+                    Object val = modeloTabla.getValueAt(fila, 0);
+                    txtIdSolicitudSeleccionada.setText(val != null ? val.toString() : "");
                 }
             }
         });
+
+        btnCrearSolicitud.addActionListener(e -> onCrearSolicitud());
+        btnAprobarSolicitud.addActionListener(e -> onAprobarSolicitud());
+        btnRegistrarCompra.addActionListener(e -> onRegistrarCompra());
+        btnRefrescar.addActionListener(e -> cargarSolicitudes());
+        btnCerrar.addActionListener(e -> dispose());
     }
 
-    private void guardarAdquisicion() {
+    // ------------------ LÓGICA ------------------
+
+    private void cargarProveedores() {
         try {
-            Adquisiciones a = new Adquisiciones();
-            a.setCodigoCompra(txtCodigo.getText());
-            a.setProveedor(txtProveedor.getText());
-            a.setCategoria(txtCategoria.getText());
-            a.setDescripcion(txtDescripcion.getText());
-            a.setCantidad(Integer.parseInt(txtCantidad.getText()));
-            a.setCostoUnitario(Double.parseDouble(txtCostoUnitario.getText()));
-            a.setFechaSolicitud(new Date());
-            a.setFechaAprobacion(null);
-            a.setEstado(txtEstado.getText());
-            a.setEliminado(false);
-
-            if (adquisicionesDAO.registrarAdquisicion(a)) {
-                JOptionPane.showMessageDialog(this, "Adquisición registrada correctamente.");
-                cargarDatosTabla();
-                limpiarCampos();
-            } else {
-                JOptionPane.showMessageDialog(this, "Error al registrar la adquisición.");
-            }
-        } catch (SQLException | NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void actualizarAdquisicion() {
-        if (txtId.getText().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Seleccione una adquisición de la tabla.");
-            return;
-        }
-
-        try {
-            Adquisiciones a = new Adquisiciones();
-            a.setIdAdquisicion(Integer.parseInt(txtId.getText()));
-            a.setCodigoCompra(txtCodigo.getText());
-            a.setProveedor(txtProveedor.getText());
-            a.setCategoria(txtCategoria.getText());
-            a.setDescripcion(txtDescripcion.getText());
-            a.setCantidad(Integer.parseInt(txtCantidad.getText()));
-            a.setCostoUnitario(Double.parseDouble(txtCostoUnitario.getText()));
-            a.setFechaSolicitud(new Date());
-            a.setFechaAprobacion(null);
-            a.setEstado(txtEstado.getText());
-
-            if (adquisicionesDAO.actualizarAdquisicion(a)) {
-                JOptionPane.showMessageDialog(this, "Adquisición actualizada correctamente.");
-                cargarDatosTabla();
-                limpiarCampos();
-            } else {
-                JOptionPane.showMessageDialog(this, "No se pudo actualizar la adquisición.");
-            }
-        } catch (SQLException | NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void eliminarAdquisicion() {
-        if (txtId.getText().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Seleccione una adquisición a eliminar.");
-            return;
-        }
-
-        try {
-            int id = Integer.parseInt(txtId.getText());
-            if (adquisicionesDAO.eliminarAdquisicion(id)) {
-                JOptionPane.showMessageDialog(this, "Adquisición eliminada correctamente.");
-                cargarDatosTabla();
-                limpiarCampos();
-            } else {
-                JOptionPane.showMessageDialog(this, "No se pudo eliminar la adquisición.");
+            cboProveedor.removeAllItems();
+            List<Proveedores> proveedores = adquisicionesDAO.listarProveedoresActivos();
+            for (Proveedores p : proveedores) {
+                cboProveedor.addItem(p);
             }
         } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            mostrarError("Error al cargar proveedores: " + ex.getMessage());
         }
     }
 
-    private void cargarDatosTabla() {
+    private void cargarSolicitudes() {
         modeloTabla.setRowCount(0);
         try {
-            List<Adquisiciones> lista = adquisicionesDAO.listarAdquisicionesActivas();
-            for (Adquisiciones a : lista) {
+            List<SolicitudCompra> lista = adquisicionesDAO.listarSolicitudesCompra();
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+            for (SolicitudCompra sc : lista) {
+                String creado = sc.getCreadoUtc() != null ? sc.getCreadoUtc().format(fmt) : "";
+                String aprobado = sc.getAprobadoUtc() != null ? sc.getAprobadoUtc().format(fmt) : "";
+
                 modeloTabla.addRow(new Object[]{
-                        a.getIdAdquisicion(),
-                        a.getCodigoCompra(),
-                        a.getProveedor(),
-                        a.getCategoria(),
-                        a.getDescripcion(),
-                        a.getCantidad(),
-                        a.getCostoUnitario(),
-                        a.getTotalCompra(),
-                        a.getEstado()
+                        sc.getId(),
+                        sc.getTituloLibro(),
+                        sc.getCantidad(),
+                        sc.getEstado(),
+                        sc.getNombreSolicitante(),
+                        sc.getNombreAprobador(),
+                        creado,
+                        aprobado
                 });
             }
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this, "Error al cargar adquisiciones: " + e.getMessage());
+        } catch (SQLException ex) {
+            mostrarError("Error al cargar solicitudes: " + ex.getMessage());
         }
     }
 
-    private void limpiarCampos() {
-        txtId.setText("");
-        txtCodigo.setText("");
-        txtProveedor.setText("");
-        txtCategoria.setText("");
-        txtDescripcion.setText("");
-        txtCantidad.setText("");
-        txtCostoUnitario.setText("");
-        txtEstado.setText("");
+    private void onCrearSolicitud() {
+        try {
+            int idLibro = Integer.parseInt(txtIdLibro.getText().trim());
+            int cantidad = Integer.parseInt(txtCantidadSolicitud.getText().trim());
+
+            if (cantidad <= 0) {
+                mostrarInfo("La cantidad debe ser mayor que cero.");
+                return;
+            }
+
+            int idSolicitud = adquisicionesDAO.crearSolicitudCompra(idLibro, cantidad, idUsuarioActual);
+            mostrarInfo("Solicitud creada correctamente. Id = " + idSolicitud);
+            txtIdLibro.setText("");
+            txtCantidadSolicitud.setText("");
+            cargarSolicitudes();
+        } catch (NumberFormatException ex) {
+            mostrarError("Id de libro y cantidad deben ser numéricos.");
+        } catch (SQLException ex) {
+            mostrarError("Error al crear solicitud: " + ex.getMessage());
+        }
     }
 
+    private void onAprobarSolicitud() {
+        String txtId = txtIdSolicitudSeleccionada.getText().trim();
+        if (txtId.isEmpty()) {
+            mostrarInfo("Seleccione una solicitud en la tabla.");
+            return;
+        }
+
+        try {
+            int idSolicitud = Integer.parseInt(txtId);
+            int opt = JOptionPane.showConfirmDialog(this,
+                    "¿Aprobar la solicitud #" + idSolicitud + "?",
+                    "Confirmar aprobación",
+                    JOptionPane.YES_NO_OPTION);
+
+            if (opt != JOptionPane.YES_OPTION) return;
+
+            boolean ok = adquisicionesDAO.aprobarSolicitudCompra(idSolicitud, idUsuarioActual);
+            if (ok) {
+                mostrarInfo("Solicitud aprobada correctamente.");
+            } else {
+                mostrarInfo("No se pudo aprobar la solicitud (ya no está en estado PENDIENTE).");
+            }
+            cargarSolicitudes();
+        } catch (NumberFormatException ex) {
+            mostrarError("Id de solicitud inválido.");
+        } catch (SQLException ex) {
+            mostrarError("Error al aprobar solicitud: " + ex.getMessage());
+        }
+    }
+
+    private void onRegistrarCompra() {
+        String txtIdSol = txtIdSolicitudSeleccionada.getText().trim();
+        if (txtIdSol.isEmpty()) {
+            mostrarInfo("Seleccione una solicitud en la tabla.");
+            return;
+        }
+
+        int fila = tablaSolicitudes.getSelectedRow();
+        if (fila < 0) {
+            mostrarInfo("Seleccione una solicitud en la tabla.");
+            return;
+        }
+
+        String estado = (String) modeloTabla.getValueAt(fila, 3);
+        if (!"APROBADA".equalsIgnoreCase(estado)) {
+            mostrarInfo("Solo se pueden registrar compras para solicitudes en estado APROBADA.");
+            return;
+        }
+
+        Proveedores proveedor = (Proveedores) cboProveedor.getSelectedItem();
+        if (proveedor == null) {
+            mostrarInfo("Seleccione un proveedor.");
+            return;
+        }
+
+        try {
+            int idSolicitud = Integer.parseInt(txtIdSol);
+
+            double costoUnit = Double.parseDouble(txtCostoUnitario.getText().trim());
+            if (costoUnit < 0) {
+                mostrarInfo("El costo unitario no puede ser negativo.");
+                return;
+            }
+
+            int idUbicacion = Integer.parseInt(txtIdUbicacion.getText().trim());
+
+            int opt = JOptionPane.showConfirmDialog(this,
+                    "Registrar compra para solicitud #" + idSolicitud +
+                            "\nProveedor: " + proveedor.getNombre() +
+                            "\nCosto unitario: Q" + costoUnit +
+                            "\nUbicación Id: " + idUbicacion,
+                    "Confirmar registro de adquisición",
+                    JOptionPane.YES_NO_OPTION);
+
+            if (opt != JOptionPane.YES_OPTION) return;
+
+            adquisicionesDAO.registrarAdquisicionDesdeSolicitud(
+                    idSolicitud,
+                    proveedor.getId(),
+                    costoUnit,
+                    idUbicacion,
+                    usernameActual
+            );
+
+            mostrarInfo("Adquisición registrada. Se crearon nuevas copias y la solicitud pasó a COMPRADA.");
+            txtCostoUnitario.setText("");
+            txtIdUbicacion.setText("");
+            cargarSolicitudes();
+        } catch (NumberFormatException ex) {
+            mostrarError("Costo unitario e IdUbicacion deben ser numéricos.");
+        } catch (SQLException ex) {
+            mostrarError("Error al registrar la compra: " + ex.getMessage());
+        }
+    }
+
+    // ------------------ UTIL ------------------
+
+    private void mostrarError(String msg) {
+        JOptionPane.showMessageDialog(this, msg, "Error", JOptionPane.ERROR_MESSAGE);
+    }
+
+    private void mostrarInfo(String msg) {
+        JOptionPane.showMessageDialog(this, msg, "Información", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    // Demo rápido
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new AdquisicionesForm().setVisible(true));
+        SwingUtilities.invokeLater(() ->
+                new AdquisicionesForm(1, "admin").setVisible(true)
+        );
     }
 }

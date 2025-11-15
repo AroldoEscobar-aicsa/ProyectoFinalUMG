@@ -1,13 +1,14 @@
 package app.view;
 
 import app.dao.CajaMovimientoDAO;
+import app.dao.CajaSesionDAO;     // ¡Importamos el DAO que ya tenías!
 import app.model.CajaMovimiento;
+import app.model.CajaSesion;     // Asumo que tienes este modelo
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.sql.SQLException;
 import java.util.List;
 
@@ -26,7 +27,11 @@ public class CajaMovimientoForm extends JFrame{
     private JTextField txtIdMulta;
     private JTextField txtMontoContado;
     private JTextField txtFechaConsulta;
-    private CajaMovimientoDAO cajaDAO;
+
+    // --- DAOs ---
+    private CajaMovimientoDAO movimientoDAO;
+    private CajaSesionDAO sesionDAO; //
+    private JLabel lblEstado;
 
     public CajaMovimientoForm() {
         setTitle("Gestión de Caja - Movimientos");
@@ -34,12 +39,15 @@ public class CajaMovimientoForm extends JFrame{
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
-        cajaDAO = new CajaMovimientoDAO();
+        // Instanciamos ambos DAOs
+        movimientoDAO = new CajaMovimientoDAO();
+        sesionDAO = new CajaSesionDAO();
+
         panelMain = new JPanel(new BorderLayout());
         add(panelMain);
 
         // --- Tabla de movimientos ---
-        String[] columnas = {"ID", "Usuario", "FechaHora", "Tipo", "Descripción", "Monto", "ID Multa", "Sistema", "Contado", "Diferencia"};
+        String[] columnas = {"ID Mov", "ID Sesión", "Fecha/Hora", "Tipo", "Concepto", "Monto", "ID Multa"};
         modeloTabla = new DefaultTableModel(columnas, 0);
         tablaMovimientos = new JTable(modeloTabla);
         panelMain.add(new JScrollPane(tablaMovimientos), BorderLayout.CENTER);
@@ -48,7 +56,7 @@ public class CajaMovimientoForm extends JFrame{
         JPanel panelDatos = new JPanel(new GridLayout(3, 4, 10, 10));
         panelDatos.setBorder(BorderFactory.createTitledBorder("Datos del Movimiento"));
 
-        txtIdUsuario = new JTextField();
+        txtIdUsuario = new JTextField("3"); // Hardcodeamos ID 3 (Financiero) para pruebas
         txtDescripcion = new JTextField();
         txtMonto = new JTextField();
         txtIdMulta = new JTextField();
@@ -57,9 +65,9 @@ public class CajaMovimientoForm extends JFrame{
 
         panelDatos.add(new JLabel("ID Usuario Cajero:"));
         panelDatos.add(txtIdUsuario);
-        panelDatos.add(new JLabel("Monto:"));
+        panelDatos.add(new JLabel("Monto (Apertura/Ingreso):"));
         panelDatos.add(txtMonto);
-        panelDatos.add(new JLabel("Descripción:"));
+        panelDatos.add(new JLabel("Concepto (Ingreso):"));
         panelDatos.add(txtDescripcion);
         panelDatos.add(new JLabel("ID Multa (opcional):"));
         panelDatos.add(txtIdMulta);
@@ -94,32 +102,41 @@ public class CajaMovimientoForm extends JFrame{
         btnSalir.addActionListener(e -> dispose());
     }
 
-    // --- MÉTODOS DE OPERACIÓN ---
+    // --- MÉTODOS DE OPERACIÓN (CORREGIDOS) ---
 
     private void registrarApertura() {
         try {
             int idUsuario = Integer.parseInt(txtIdUsuario.getText());
-            double monto = Double.parseDouble(txtMonto.getText());
+            double montoInicial = Double.parseDouble(txtMonto.getText());
             LocalDate hoy = LocalDate.now();
 
-            // Validar si ya hay una caja abierta
-            if (cajaDAO.verificarCajaAbierta(idUsuario, hoy)) {
+            // 1. Validar si ya hay una caja abierta (usando el DAO correcto)
+            // (Tu DAO no recibe fecha, asume que es 'hoy')
+            if (sesionDAO.tieneCajaAbierta(idUsuario)) {
                 mostrarInfo("Ya tienes una caja abierta para hoy. No puedes abrir otra.");
                 return;
             }
 
-            CajaMovimiento mov = new CajaMovimiento();
-            mov.setIdUsuarioCajero(idUsuario);
-            mov.setFechaHora(LocalDateTime.now());
-            mov.setTipoMovimiento("Apertura");
-            mov.setDescripcion("Apertura de caja");
-            mov.setMonto(monto);
-
-            if (cajaDAO.registrar(mov)) {
-                mostrarInfo("Apertura registrada correctamente.");
-                consultarMovimientos();
+            // 2. Llamar al DAO de Sesiones para abrir
+            CajaSesion nuevaSesion = sesionDAO.abrirCaja(idUsuario);
+            if (nuevaSesion == null) {
+                throw new SQLException("No se pudo crear la sesión.");
             }
 
+            // 3. Crear el primer movimiento (el fondo inicial)
+            CajaMovimiento movApertura = new CajaMovimiento();
+            movApertura.setIdCajaSesion(nuevaSesion.getId());
+            movApertura.setTipo("ENTRADA");
+            movApertura.setConcepto("Apertura de caja (fondo inicial)");
+            movApertura.setMonto(montoInicial);
+
+            if (movimientoDAO.reistrar(movApertura)) { // Asumiendo que renombraste 'crear' a 'registrar'
+                mostrarInfo("Apertura registrada correctamente. ID Sesión: " + nuevaSesion.getId());
+                consultarMovimientos(); // Refrescar la tabla
+            }
+
+        } catch (NumberFormatException ex) {
+            mostrarError("Formato de número inválido: " + ex.getMessage());
         } catch (Exception ex) {
             mostrarError("Error al registrar apertura: " + ex.getMessage());
         }
@@ -135,24 +152,29 @@ public class CajaMovimientoForm extends JFrame{
                 idMulta = Integer.parseInt(txtIdMulta.getText());
             }
 
-            if (!cajaDAO.verificarCajaAbierta(idUsuario, LocalDate.now())) {
+            // 1. Verificar que la caja esté abierta
+            CajaSesion sesionActual = sesionDAO.getCajaAbierta(idUsuario);
+            if (sesionActual == null) {
                 mostrarInfo("No hay caja abierta para registrar ingresos.");
                 return;
             }
 
+            // 2. Crear el objeto Movimiento
             CajaMovimiento mov = new CajaMovimiento();
-            mov.setIdUsuarioCajero(idUsuario);
-            mov.setFechaHora(LocalDateTime.now());
-            mov.setTipoMovimiento("Ingreso");
-            mov.setDescripcion(desc.isEmpty() ? "Ingreso" : desc);
+            mov.setIdCajaSesion(sesionActual.getId()); // ¡ID de la sesión actual!
+            mov.setTipo("ENTRADA"); // Tu BD usa ENTRADA
+            mov.setConcepto(desc.isEmpty() ? "Ingreso manual" : desc);
             mov.setMonto(monto);
             mov.setIdMulta(idMulta);
 
-            if (cajaDAO.registrar(mov)) {
+            // 3. Registrar el movimiento (usando el DAO de Movimientos)
+            if (movimientoDAO.reistrar(mov)) {
                 mostrarInfo("Ingreso registrado correctamente.");
                 consultarMovimientos();
             }
 
+        } catch (NumberFormatException ex) {
+            mostrarError("Formato de número inválido: " + ex.getMessage());
         } catch (Exception ex) {
             mostrarError("Error al registrar ingreso: " + ex.getMessage());
         }
@@ -164,30 +186,32 @@ public class CajaMovimientoForm extends JFrame{
             double contado = Double.parseDouble(txtMontoContado.getText());
             LocalDate hoy = LocalDate.now();
 
-            if (!cajaDAO.verificarCajaAbierta(idUsuario, hoy)) {
+            // 1. Verificar que la caja esté abierta
+            CajaSesion sesionActual = sesionDAO.getCajaAbierta(idUsuario);
+            if (sesionActual == null) {
                 mostrarInfo("No hay caja abierta para cerrar.");
                 return;
             }
 
-            double totalSistema = cajaDAO.calcularTotalSistemaDia(idUsuario, hoy);
+            // 2. Calcular totales usando el DAO de Movimientos
+            // (Tu DAO 'calcularTotalSesion' recibe el ID de la sesión)
+            double totalSistema = movimientoDAO.calcularTotalSesion(sesionActual.getId());
+
+            // 3. Crear la observación para el cierre
             double diferencia = contado - totalSistema;
+            String observacion = String.format(
+                    "Cierre. Sistema: %.2f, Contado: %.2f, Diferencia: %.2f",
+                    totalSistema, contado, diferencia
+            );
 
-            CajaMovimiento mov = new CajaMovimiento();
-            mov.setIdUsuarioCajero(idUsuario);
-            mov.setFechaHora(LocalDateTime.now());
-            mov.setTipoMovimiento("Cierre");
-            mov.setDescripcion("Cierre de caja");
-            mov.setMonto(0);
-            mov.setMontoCalculadoSistema(totalSistema);
-            mov.setMontoRealContado(contado);
-            mov.setDiferencia(diferencia);
-
-            if (cajaDAO.registrar(mov)) {
-                mostrarInfo("Cierre registrado.\nTotal Sistema: " + totalSistema +
-                        "\nContado: " + contado + "\nDiferencia: " + diferencia);
+            // 4. Llamar al DAO de Sesiones para cerrar
+            if (sesionDAO.cerrarCaja(sesionActual.getId(), observacion)) {
+                mostrarInfo("Cierre registrado.\n" + observacion);
                 consultarMovimientos();
             }
 
+        } catch (NumberFormatException ex) {
+            mostrarError("Formato de número inválido: " + ex.getMessage());
         } catch (Exception ex) {
             mostrarError("Error al registrar cierre: " + ex.getMessage());
         }
@@ -196,29 +220,42 @@ public class CajaMovimientoForm extends JFrame{
     private void consultarMovimientos() {
         try {
             modeloTabla.setRowCount(0);
-            int idUsuario = Integer.parseInt(txtIdUsuario.getText());
-            LocalDate fecha = LocalDate.parse(txtFechaConsulta.getText());
-
-            List<CajaMovimiento> lista = cajaDAO.getMovimientosDiaUsuario(idUsuario, fecha);
-            for (CajaMovimiento m : lista) {
-                modeloTabla.addRow(new Object[]{
-                        m.getIdMovimiento(),
-                        m.getIdUsuarioCajero(),
-                        m.getFechaHora(),
-                        m.getTipoMovimiento(),
-                        m.getDescripcion(),
-                        m.getMonto(),
-                        m.getIdMulta(),
-                        m.getMontoCalculadoSistema(),
-                        m.getMontoRealContado(),
-                        m.getDiferencia()
-                });
+            int idUsuario;
+            LocalDate fecha;
+            try {
+                idUsuario = Integer.parseInt(txtIdUsuario.getText());
+                fecha = LocalDate.parse(txtFechaConsulta.getText());
+            } catch (Exception e) {
+                // No mostramos error, solo no consultamos si los campos están mal
+                return;
             }
+
+            // 1. Encontrar la sesión (o sesiones) de ese día
+            List<CajaSesion> sesionesDia = sesionDAO.getSesionesPorUsuarioYFecha(idUsuario, fecha, fecha);
+            if (sesionesDia.isEmpty()) {
+                lblEstado.setText("No se encontraron sesiones para este usuario en esta fecha.");
+                return;
+            }
+
+            // 2. Por cada sesión, traer sus movimientos
+            for (CajaSesion sesion : sesionesDia) {
+                List<CajaMovimiento> lista = movimientoDAO.getMovimientosPorSesion(sesion.getId());
+                for (CajaMovimiento m : lista) {
+                    modeloTabla.addRow(new Object[]{
+                            m.getIdMovimiento(),
+                            m.getIdCajaSesion(),
+                            m.getCreadoUtc(),
+                            m.getTipo(),
+                            m.getConcepto(),
+                            m.getMonto(),
+                            m.getIdMulta()
+                    });
+                }
+            }
+            lblEstado.setText("Movimientos cargados.");
 
         } catch (SQLException ex) {
             mostrarError("Error al consultar movimientos: " + ex.getMessage());
-        } catch (Exception ex) {
-            mostrarError("Entrada inválida: " + ex.getMessage());
         }
     }
 

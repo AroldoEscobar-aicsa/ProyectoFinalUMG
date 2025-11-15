@@ -17,7 +17,7 @@ public class CajaMovimientoDAO {
     /**
      * Registra un nuevo movimiento de caja (ENTRADA o SALIDA).
      */
-    public boolean crear(CajaMovimiento movimiento) throws SQLException {
+    public boolean reistrar(CajaMovimiento movimiento) throws SQLException {
         String sql = "INSERT INTO CajaMovimientos " +
                 "(IdCajaSesion, Tipo, Concepto, Monto, IdMulta, CreadoUtc) " +
                 "VALUES (?, ?, ?, ?, ?, GETUTCDATE())";
@@ -207,6 +207,40 @@ public class CajaMovimientoDAO {
             }
         }
         return null;
+    }
+
+    /**
+     * MÉTODO AÑADIDO: Verifica si un usuario ya tiene una sesión
+     * en estado 'ABIERTA' para una fecha específica.
+     *
+     * @param idUsuario El ID del usuario cajero.
+     * @param fecha La fecha a verificar (generalmente 'hoy').
+     * @return true si ya existe una sesión abierta, false si no.
+     */
+    public boolean verificarCajaAbierta(int idUsuario, LocalDate fecha) throws SQLException {
+
+        // Esta consulta busca en la tabla CajaSesiones
+        String sql = "SELECT COUNT(Id) AS Total " +
+                "FROM CajaSesiones " +
+                "WHERE IdUsuario = ? " +
+                "AND Estado = 'ABIERTA' " +
+                "AND CAST(AbiertaUtc AS DATE) = ?";
+
+        try (Connection conn = Conexion.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, idUsuario);
+            pstmt.setDate(2, Date.valueOf(fecha));
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    // Si el conteo es > 0, significa que SÍ hay una caja abierta
+                    return rs.getInt("Total") > 0;
+                }
+            }
+        }
+        // Si hay un error o no encuentra nada, asumimos que no hay caja
+        return false;
     }
 
     // --- Helper para mapear ResultSet ---

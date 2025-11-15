@@ -131,7 +131,7 @@ public class CajaService {
         movimiento.setMonto(multa.getMontoCalculado());
         movimiento.setIdMulta(idMulta);
 
-        boolean movimientoCreado = cajaMovimientoDAO.crear(movimiento);
+        boolean movimientoCreado = cajaMovimientoDAO.reistrar(movimiento);
         if (!movimientoCreado) {
             throw new SQLException("No se pudo registrar el movimiento de caja.");
         }

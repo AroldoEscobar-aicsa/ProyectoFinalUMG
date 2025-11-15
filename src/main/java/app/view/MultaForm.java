@@ -1,7 +1,9 @@
 package app.view;
 
 import app.dao.MultaDAO;
+import app.dao.PrestamosDAO;
 import app.model.Multa;
+import app.model.Prestamos;
 
 import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
@@ -25,15 +27,24 @@ public class MultaForm extends JFrame {
     private JButton btnSalir;
     private DefaultTableModel modeloTabla;
 
+    // Combo para CREAR multa manual
+    private JComboBox<Prestamos> cboPrestamoMulta;
+    private JTextField txtMontoNueva;
+    private JTextField txtJustificacionNueva;
+    private JButton btnCrearMulta;
+
     private MultaDAO multaDAO;
+    private PrestamosDAO prestamosDAO;
 
     public MultaForm() {
         setTitle("Gestión de Multas");
-        setSize(900, 600);
+        setSize(1000, 650);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
         multaDAO = new MultaDAO();
+        prestamosDAO = new PrestamosDAO();
+
         panelMain = new JPanel(new BorderLayout(10, 10));
         add(panelMain);
 
@@ -61,7 +72,7 @@ public class MultaForm extends JFrame {
         JScrollPane scroll = new JScrollPane(tablaMultas);
         panelMain.add(scroll, BorderLayout.CENTER);
 
-        // Cuando seleccionas una fila, rellenar campos ID y Monto
+        // Selección de fila -> rellenar ID multa y monto
         tablaMultas.getSelectionModel().setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         tablaMultas.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
             @Override
@@ -82,7 +93,59 @@ public class MultaForm extends JFrame {
             }
         });
 
-        // --- PANEL INFERIOR (Acciones) ---
+        // --- PANEL SUPERIOR (botones generales) ---
+        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        btnCargarPendientes = new JButton("Cargar pendientes");
+        btnBuscarPorId = new JButton("Buscar por ID");
+        btnSalir = new JButton("Salir");
+
+        panelBotones.add(btnCargarPendientes);
+        panelBotones.add(btnBuscarPorId);
+        panelBotones.add(btnSalir);
+
+        panelMain.add(panelBotones, BorderLayout.NORTH);
+
+        // --- PANEL PARA CREAR MULTA MANUAL (CON COMBO) ---
+        JPanel panelCrearMulta = new JPanel(new GridLayout(2, 4, 10, 10));
+        panelCrearMulta.setBorder(BorderFactory.createTitledBorder("Crear multa manual sobre préstamo"));
+
+        cboPrestamoMulta = new JComboBox<>();
+        txtMontoNueva = new JTextField();
+        txtJustificacionNueva = new JTextField();
+        btnCrearMulta = new JButton("Crear multa");
+
+        // Renderer para ver más bonito el préstamo en el combo
+        cboPrestamoMulta.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                          boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof Prestamos) {
+                    Prestamos p = (Prestamos) value;
+                    String texto = "#" + p.getId()
+                            + " | " + (p.getCodigoCliente() != null ? p.getCodigoCliente() : "")
+                            + " - " + (p.getNombreCliente() != null ? p.getNombreCliente() : "")
+                            + " | " + (p.getTitulo() != null ? p.getTitulo() : "")
+                            + " | " + (p.getEstado() != null ? p.getEstado() : "");
+                    setText(texto);
+                } else if (value == null && index == -1) {
+                    setText("-- Seleccione un préstamo --");
+                }
+                return this;
+            }
+        });
+
+        panelCrearMulta.add(new JLabel("Préstamo:"));
+        panelCrearMulta.add(cboPrestamoMulta);
+        panelCrearMulta.add(new JLabel("Monto multa:"));
+        panelCrearMulta.add(txtMontoNueva);
+
+        panelCrearMulta.add(new JLabel("Justificación:"));
+        panelCrearMulta.add(txtJustificacionNueva);
+        panelCrearMulta.add(new JLabel(""));
+        panelCrearMulta.add(btnCrearMulta);
+
+        // --- PANEL INFERIOR (Acciones sobre multas EXISTENTES) ---
         JPanel panelAcciones = new JPanel(new GridLayout(2, 4, 10, 10));
         panelAcciones.setBorder(BorderFactory.createTitledBorder("Acciones de Multa"));
 
@@ -102,18 +165,12 @@ public class MultaForm extends JFrame {
         panelAcciones.add(btnRegistrarPago);
         panelAcciones.add(btnExonerar);
 
-        // --- PANEL SUPERIOR (botones generales) ---
-        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        btnCargarPendientes = new JButton("Cargar pendientes");
-        btnBuscarPorId = new JButton("Buscar por ID");
-        btnSalir = new JButton("Salir");
+        // Contenedor para ambos paneles de abajo
+        JPanel panelSur = new JPanel(new BorderLayout(10, 10));
+        panelSur.add(panelCrearMulta, BorderLayout.NORTH);
+        panelSur.add(panelAcciones, BorderLayout.SOUTH);
 
-        panelBotones.add(btnCargarPendientes);
-        panelBotones.add(btnBuscarPorId);
-        panelBotones.add(btnSalir);
-
-        panelMain.add(panelBotones, BorderLayout.NORTH);
-        panelMain.add(panelAcciones, BorderLayout.SOUTH);
+        panelMain.add(panelSur, BorderLayout.SOUTH);
 
         // --- EVENTOS ---
         btnCargarPendientes.addActionListener(e -> cargarMultasPendientes());
@@ -121,9 +178,28 @@ public class MultaForm extends JFrame {
         btnRegistrarPago.addActionListener(e -> registrarPago());
         btnExonerar.addActionListener(e -> exonerarMulta());
         btnSalir.addActionListener(e -> dispose());
+        btnCrearMulta.addActionListener(e -> crearMultaManual());
+
+        // Cargar datos iniciales
+        cargarPrestamosEnCombo();
+        cargarMultasPendientes();
     }
 
-    // --- MÉTODOS DE LÓGICA ---
+    // --- LÓGICA PARA CARGAR PRESTAMOS EN EL COMBO ---
+
+    private void cargarPrestamosEnCombo() {
+        try {
+            cboPrestamoMulta.removeAllItems();
+            List<Prestamos> prestamos = prestamosDAO.listarPrestamosActivosYAtrasados();
+            for (Prestamos p : prestamos) {
+                cboPrestamoMulta.addItem(p);
+            }
+        } catch (SQLException ex) {
+            mostrarError("Error al cargar préstamos para multas: " + ex.getMessage());
+        }
+    }
+
+    // --- MÉTODOS DE LÓGICA DE MULTAS ---
 
     private void cargarMultasPendientes() {
         try {
@@ -229,7 +305,6 @@ public class MultaForm extends JFrame {
                 mostrarInfo("Pago registrado correctamente.");
                 cargarMultasPendientes();
                 txtMontoPago.setText("");
-                // Opcional: limpiar selección
                 tablaMultas.clearSelection();
             } else {
                 mostrarError("No se pudo registrar el pago.");
@@ -280,6 +355,59 @@ public class MultaForm extends JFrame {
             mostrarError("El ID de la multa debe ser numérico.");
         } catch (SQLException ex) {
             mostrarError("Error al exonerar multa: " + ex.getMessage());
+        }
+    }
+
+    private void crearMultaManual() {
+        try {
+            Prestamos prestamoSel = (Prestamos) cboPrestamoMulta.getSelectedItem();
+            String montoStr = txtMontoNueva.getText().trim();
+            String justif = txtJustificacionNueva.getText().trim();
+
+            if (prestamoSel == null) {
+                mostrarInfo("Debe seleccionar un préstamo.");
+                return;
+            }
+
+            if (montoStr.isEmpty()) {
+                mostrarInfo("Debe indicar el monto de la multa.");
+                return;
+            }
+
+            int idPrestamo = prestamoSel.getId();
+            double monto = Double.parseDouble(montoStr);
+
+            if (monto <= 0) {
+                mostrarInfo("El monto de la multa debe ser mayor que cero.");
+                return;
+            }
+
+            int opt = JOptionPane.showConfirmDialog(this,
+                    "¿Crear multa por Q" + monto + " para el préstamo #" + idPrestamo + "?\n" +
+                            "Cliente: " + prestamoSel.getNombreCliente() + "\n" +
+                            "Libro: " + prestamoSel.getTitulo(),
+                    "Confirmar creación de multa",
+                    JOptionPane.YES_NO_OPTION);
+
+            if (opt != JOptionPane.YES_OPTION) return;
+
+            boolean ok = multaDAO.crearMultaManual(idPrestamo, monto, justif);
+            if (!ok) {
+                mostrarInfo("No se pudo crear la multa. El préstamo no existe o no está en estado PRESTADO/ACTIVO.");
+                return;
+            }
+
+            mostrarInfo("Multa creada correctamente.");
+            txtMontoNueva.setText("");
+            txtJustificacionNueva.setText("");
+
+            // Refrescar lista de pendientes
+            cargarMultasPendientes();
+
+        } catch (NumberFormatException ex) {
+            mostrarError("El monto debe ser numérico.");
+        } catch (SQLException ex) {
+            mostrarError("Error al crear la multa: " + ex.getMessage());
         }
     }
 

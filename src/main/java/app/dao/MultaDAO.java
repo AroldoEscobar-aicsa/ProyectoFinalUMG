@@ -15,7 +15,8 @@ public class MultaDAO {
 
     /**
      * Crea un nuevo registro de multa en la BD.
-     * Se llama cuando un préstamo entra en mora (sp_Prestamo_Devolver).
+     * Se llama cuando un préstamo entra en mora (sp_Prestamo_Devolver) o
+     * desde la capa Java usando Multa directamente.
      */
     public boolean crear(Multa multa) throws SQLException {
         String sql = "INSERT INTO Multas (IdPrestamo, IdCliente, Monto, Estado, Justificacion) " +
@@ -41,6 +42,44 @@ public class MultaDAO {
     }
 
     /**
+     * Crea una multa manual sobre un préstamo EXISTENTE y ACTIVO/PRESTADO.
+     * - No pedimos IdCliente en la UI: se toma de la tabla Prestamos.
+     * - Estado siempre 'PENDIENTE'.
+     */
+    public boolean crearMultaManual(int idPrestamo, double monto, String justificacion) throws SQLException {
+        String sql = """
+            INSERT INTO dbo.Multas (IdPrestamo, IdCliente, Monto, Estado, Justificacion)
+            SELECT 
+                p.Id        AS IdPrestamo,
+                p.IdCliente AS IdCliente,
+                ?,          -- Monto
+                'PENDIENTE' AS Estado,
+                ?           -- Justificacion
+            FROM dbo.Prestamos p
+            WHERE p.Id = ?
+              AND p.Estado IN ('PRESTADO','ACTIVO')
+            """;
+
+        try (Connection conn = Conexion.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setDouble(1, monto);
+
+            if (justificacion == null || justificacion.isBlank()) {
+                pstmt.setNull(2, Types.NVARCHAR);
+            } else {
+                pstmt.setString(2, justificacion.trim());
+            }
+
+            pstmt.setInt(3, idPrestamo);
+
+            int filas = pstmt.executeUpdate();
+            // Si filas = 0, no existía préstamo o no estaba en estado válido
+            return filas > 0;
+        }
+    }
+
+    /**
      * Marca una multa como PAGADA.
      * (Versión simple: solo actualiza Estado y PagadoUtc. El movimiento en caja lo puedes
      * hacer llamando a sp_Caja_PagarMulta desde otra capa si quieres integrarlo después).
@@ -62,8 +101,6 @@ public class MultaDAO {
 
     /**
      * Marca una multa como EXONERADA y guarda la justificación.
-     * (Si más adelante quieres usar sp_Multa_Exonerar, aquí puedes reemplazar el UPDATE
-     * por una llamada al SP vía CallableStatement).
      */
     public boolean exonerar(int idMulta, String justificacion) throws SQLException {
         String sql = "UPDATE Multas " +

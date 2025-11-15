@@ -387,4 +387,56 @@ public class PrestamosDAO {
         }
         return lista;
     }
+    /**
+     * Lista TODOS los préstamos ACTIVO / ATRASADO
+     * (para usarlos en el combo de creación de multas).
+     */
+    public List<Prestamos> listarPrestamosActivosYAtrasados() throws SQLException {
+        final String sql = """
+            SELECT 
+                P.Id, P.IdCliente, P.IdCopia, 
+                P.FechaPrestamoUtc, P.FechaVencimientoUtc, P.FechaDevolucionUtc, 
+                P.Renovaciones, P.Estado,
+                COP.CodigoBarra,
+                L.Titulo,
+                (CLI.Nombres + ' ' + CLI.Apellidos) AS NombreCliente,
+                CLI.Codigo AS CodigoCliente
+            FROM dbo.Prestamos P
+            JOIN dbo.Clientes CLI ON P.IdCliente = CLI.Id
+            JOIN dbo.Copias   COP ON P.IdCopia   = COP.Id
+            JOIN dbo.Libros   L   ON COP.IdLibro = L.Id
+            WHERE P.Estado IN ('ACTIVO','ATRASADO')
+            ORDER BY P.FechaPrestamoUtc DESC
+            """;
+
+        List<Prestamos> lista = new ArrayList<>();
+        try (Connection c = Conexion.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                Prestamos p = new Prestamos();
+                p.setId(rs.getInt("Id"));
+                p.setIdCliente(rs.getInt("IdCliente"));
+                p.setCodigoCliente(rs.getString("CodigoCliente"));
+                p.setNombreCliente(rs.getString("NombreCliente"));
+                p.setIdCopia(rs.getInt("IdCopia"));
+                p.setCodigoBarra(rs.getString("CodigoBarra"));
+                p.setTitulo(rs.getString("Titulo"));
+
+                Timestamp fp = rs.getTimestamp("FechaPrestamoUtc");
+                Timestamp fv = rs.getTimestamp("FechaVencimientoUtc");
+                Timestamp fd = rs.getTimestamp("FechaDevolucionUtc");
+
+                p.setFechaPrestamoUtc(fp != null ? fp.toLocalDateTime() : null);
+                p.setFechaVencimientoUtc(fv != null ? fv.toLocalDateTime() : null);
+                p.setFechaDevolucionUtc(fd != null ? fd.toLocalDateTime() : null);
+
+                p.setRenovaciones(rs.getInt("Renovaciones"));
+                p.setEstado(rs.getString("Estado"));
+                lista.add(p);
+            }
+        }
+        return lista;
+    }
 }

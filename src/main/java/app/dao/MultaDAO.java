@@ -15,10 +15,7 @@ public class MultaDAO {
 
     /**
      * Crea un nuevo registro de multa en la BD.
-     * Se llama cuando un préstamo entra en mora.
-     * Mapea:
-     *  - IdPrestamo, IdCliente, Monto, Estado, Justificacion
-     *  - CreadoUtc lo llena la BD con GETUTCDATE()
+     * Se llama cuando un préstamo entra en mora (sp_Prestamo_Devolver).
      */
     public boolean crear(Multa multa) throws SQLException {
         String sql = "INSERT INTO Multas (IdPrestamo, IdCliente, Monto, Estado, Justificacion) " +
@@ -44,9 +41,9 @@ public class MultaDAO {
     }
 
     /**
-     * Actualiza el estado de una multa a PAGADA (pago total).
-     * No hay columna montoPagado, así que sólo se marca el estado y la fecha de pago.
-     * Esto se llama DESPUÉS de registrar el CajaMovimiento.
+     * Marca una multa como PAGADA.
+     * (Versión simple: solo actualiza Estado y PagadoUtc. El movimiento en caja lo puedes
+     * hacer llamando a sp_Caja_PagarMulta desde otra capa si quieres integrarlo después).
      */
     public boolean actualizarPago(int idMulta, double nuevoMontoPagadoTotal, String nuevoEstado) throws SQLException {
         String sql = "UPDATE Multas " +
@@ -65,7 +62,8 @@ public class MultaDAO {
 
     /**
      * Marca una multa como EXONERADA y guarda la justificación.
-     * Cumple el requisito de "exoneraciones con justificación".
+     * (Si más adelante quieres usar sp_Multa_Exonerar, aquí puedes reemplazar el UPDATE
+     * por una llamada al SP vía CallableStatement).
      */
     public boolean exonerar(int idMulta, String justificacion) throws SQLException {
         String sql = "UPDATE Multas " +
@@ -83,30 +81,85 @@ public class MultaDAO {
     }
 
     /**
-     * Obtiene todas las multas pendientes (Cuentas por Cobrar).
+     * Multas pendientes con información enriquecida:
+     * - Nombre completo del cliente
+     * - Código del cliente
+     * - Título del libro
+     * - IdCopia y código de barra
+     * - Días de atraso (recalculado aprox desde el préstamo)
      */
     public List<Multa> getMultasPendientes() throws SQLException {
         List<Multa> multas = new ArrayList<>();
-        String sql = "SELECT * FROM Multas WHERE Estado = 'PENDIENTE'";
+
+        String sql = """
+            SELECT 
+                m.Id                AS IdMulta,
+                m.IdPrestamo,
+                m.IdCliente,
+                m.Monto,
+                m.Estado,
+                m.Justificacion,
+                m.CreadoUtc,
+                m.PagadoUtc,
+                c.Codigo           AS CodigoCliente,
+                c.Nombres,
+                c.Apellidos,
+                p.IdCopia,
+                cp.CodigoBarra,
+                l.Titulo           AS TituloLibro,
+                DATEDIFF(DAY, p.FechaVencimientoUtc, ISNULL(p.FechaDevolucionUtc, m.CreadoUtc)) AS DiasAtraso
+            FROM dbo.Multas m
+            JOIN dbo.Clientes  c  ON c.Id  = m.IdCliente
+            JOIN dbo.Prestamos p  ON p.Id  = m.IdPrestamo
+            JOIN dbo.Copias    cp ON cp.Id = p.IdCopia
+            JOIN dbo.Libros    l  ON l.Id  = cp.IdLibro
+            WHERE m.Estado = 'PENDIENTE'
+            ORDER BY m.CreadoUtc DESC
+            """;
 
         try (Connection conn = Conexion.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+             PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
 
             while (rs.next()) {
-                multas.add(mapearResultSet(rs));
+                multas.add(mapearMultaConJoin(rs));
             }
         }
         return multas;
     }
 
     /**
-     * Obtiene las multas pendientes de un cliente específico.
+     * Multas pendientes de un cliente específico (también con joins).
      */
     public List<Multa> getMultasPendientesPorCliente(int idCliente) throws SQLException {
         List<Multa> multas = new ArrayList<>();
-        String sql = "SELECT * FROM Multas " +
-                "WHERE IdCliente = ? AND Estado = 'PENDIENTE'";
+
+        String sql = """
+            SELECT 
+                m.Id                AS IdMulta,
+                m.IdPrestamo,
+                m.IdCliente,
+                m.Monto,
+                m.Estado,
+                m.Justificacion,
+                m.CreadoUtc,
+                m.PagadoUtc,
+                c.Codigo           AS CodigoCliente,
+                c.Nombres,
+                c.Apellidos,
+                p.IdCopia,
+                cp.CodigoBarra,
+                l.Titulo           AS TituloLibro,
+                DATEDIFF(DAY, p.FechaVencimientoUtc, ISNULL(p.FechaDevolucionUtc, m.CreadoUtc)) AS DiasAtraso
+            FROM dbo.Multas m
+            JOIN dbo.Clientes  c  ON c.Id  = m.IdCliente
+            JOIN dbo.Prestamos p  ON p.Id  = m.IdPrestamo
+            JOIN dbo.Copias    cp ON cp.Id = p.IdCopia
+            JOIN dbo.Libros    l  ON l.Id  = cp.IdLibro
+            WHERE m.Estado = 'PENDIENTE'
+              AND m.IdCliente = ?
+            ORDER BY m.CreadoUtc DESC
+            """;
 
         try (Connection conn = Conexion.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -114,15 +167,41 @@ public class MultaDAO {
             pstmt.setInt(1, idCliente);
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
-                    multas.add(mapearResultSet(rs));
+                    multas.add(mapearMultaConJoin(rs));
                 }
             }
         }
         return multas;
     }
 
+    /**
+     * Buscar multa por Id con datos enriquecidos (para Buscar por ID en pantalla).
+     */
     public Multa buscarPorId(int idMulta) throws SQLException {
-        String sql = "SELECT * FROM Multas WHERE Id = ?";
+        String sql = """
+            SELECT 
+                m.Id                AS IdMulta,
+                m.IdPrestamo,
+                m.IdCliente,
+                m.Monto,
+                m.Estado,
+                m.Justificacion,
+                m.CreadoUtc,
+                m.PagadoUtc,
+                c.Codigo           AS CodigoCliente,
+                c.Nombres,
+                c.Apellidos,
+                p.IdCopia,
+                cp.CodigoBarra,
+                l.Titulo           AS TituloLibro,
+                DATEDIFF(DAY, p.FechaVencimientoUtc, ISNULL(p.FechaDevolucionUtc, m.CreadoUtc)) AS DiasAtraso
+            FROM dbo.Multas m
+            JOIN dbo.Clientes  c  ON c.Id  = m.IdCliente
+            JOIN dbo.Prestamos p  ON p.Id  = m.IdPrestamo
+            JOIN dbo.Copias    cp ON cp.Id = p.IdCopia
+            JOIN dbo.Libros    l  ON l.Id  = cp.IdLibro
+            WHERE m.Id = ?
+            """;
 
         try (Connection conn = Conexion.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -130,7 +209,7 @@ public class MultaDAO {
             pstmt.setInt(1, idMulta);
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    return mapearResultSet(rs);
+                    return mapearMultaConJoin(rs);
                 }
             }
         }
@@ -138,9 +217,7 @@ public class MultaDAO {
     }
 
     /**
-     * REPORTE: Clientes Morosos.
-     * Devuelve un mapa donde la llave es el ID del cliente y el valor es su deuda total.
-     * Deuda = SUM(Monto) de multas PENDIENTE.
+     * REPORTE: Clientes morosos (igual que lo tenías).
      */
     public Map<Integer, Double> getReporteClientesMorosos() throws SQLException {
         Map<Integer, Double> reporte = new HashMap<>();
@@ -162,32 +239,30 @@ public class MultaDAO {
         return reporte;
     }
 
-    // --- Helper ---
-    private Multa mapearResultSet(ResultSet rs) throws SQLException {
+    /**
+     * Mapea resultSet de las consultas JOIN (con cliente, libro, copia, días atraso).
+     */
+    private Multa mapearMultaConJoin(ResultSet rs) throws SQLException {
         Multa m = new Multa();
 
-        m.setIdMulta(rs.getInt("Id"));
+        m.setIdMulta(rs.getInt("IdMulta"));
         m.setIdPrestamo(rs.getInt("IdPrestamo"));
         m.setIdCliente(rs.getInt("IdCliente"));
 
-        // Monto -> montoCalculado
         m.setMontoCalculado(rs.getDouble("Monto"));
 
-        // Estado
         String estado = rs.getString("Estado");
         m.setEstado(estado);
 
-        // montoPagado derivado:
+        // montoPagado derivado
         if ("PENDIENTE".equalsIgnoreCase(estado)) {
             m.setMontoPagado(0.0);
         } else {
             m.setMontoPagado(m.getMontoCalculado());
         }
 
-        // Justificación
         m.setJustificacionExoneracion(rs.getString("Justificacion"));
 
-        // Fechas (tomando solo la parte de fecha)
         Timestamp creado = rs.getTimestamp("CreadoUtc");
         if (creado != null) {
             LocalDateTime ldt = creado.toLocalDateTime();
@@ -200,9 +275,115 @@ public class MultaDAO {
             m.setFechaLimitePago(ldt.toLocalDate());
         }
 
-        // No existe columna diasAtraso en la BD; por ahora lo dejamos en 0
-        m.setDiasAtraso(0);
+        int dias = rs.getInt("DiasAtraso");
+        if (dias < 0) dias = 0;
+        m.setDiasAtraso(dias);
+
+        // Datos de cliente y libro
+        m.setCodigoCliente(rs.getString("CodigoCliente"));
+
+        String nombres = rs.getString("Nombres");
+        String apellidos = rs.getString("Apellidos");
+        String nombreCompleto = ((nombres != null ? nombres : "") + " " + (apellidos != null ? apellidos : "")).trim();
+        m.setNombreCliente(nombreCompleto);
+
+        m.setTituloLibro(rs.getString("TituloLibro"));
+
+        int idCopia = rs.getInt("IdCopia");
+        if (!rs.wasNull()) {
+            m.setIdCopia(idCopia);
+        }
+        m.setCodigoBarraCopia(rs.getString("CodigoBarra"));
 
         return m;
+    }
+
+    /**
+     * Multas EXONERADAS con información enriquecida.
+     */
+    public List<Multa> getMultasExoneradas() throws SQLException {
+        List<Multa> multas = new ArrayList<>();
+
+        String sql = """
+            SELECT 
+                m.Id                AS IdMulta,
+                m.IdPrestamo,
+                m.IdCliente,
+                m.Monto,
+                m.Estado,
+                m.Justificacion,
+                m.CreadoUtc,
+                m.PagadoUtc,
+                c.Codigo           AS CodigoCliente,
+                c.Nombres,
+                c.Apellidos,
+                p.IdCopia,
+                cp.CodigoBarra,
+                l.Titulo           AS TituloLibro,
+                DATEDIFF(DAY, p.FechaVencimientoUtc, ISNULL(p.FechaDevolucionUtc, m.CreadoUtc)) AS DiasAtraso
+            FROM dbo.Multas m
+            JOIN dbo.Clientes  c  ON c.Id  = m.IdCliente
+            JOIN dbo.Prestamos p  ON p.Id  = m.IdPrestamo
+            JOIN dbo.Copias    cp ON cp.Id = p.IdCopia
+            JOIN dbo.Libros    l  ON l.Id  = cp.IdLibro
+            WHERE m.Estado = 'EXONERADA'
+            ORDER BY m.PagadoUtc DESC, m.CreadoUtc DESC
+            """;
+
+        try (Connection conn = Conexion.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+
+            while (rs.next()) {
+                multas.add(mapearMultaConJoin(rs));
+            }
+        }
+        return multas;
+    }
+
+    /**
+     * Multas EXONERADAS de un cliente específico.
+     */
+    public List<Multa> getMultasExoneradasPorCliente(int idCliente) throws SQLException {
+        List<Multa> multas = new ArrayList<>();
+
+        String sql = """
+            SELECT 
+                m.Id                AS IdMulta,
+                m.IdPrestamo,
+                m.IdCliente,
+                m.Monto,
+                m.Estado,
+                m.Justificacion,
+                m.CreadoUtc,
+                m.PagadoUtc,
+                c.Codigo           AS CodigoCliente,
+                c.Nombres,
+                c.Apellidos,
+                p.IdCopia,
+                cp.CodigoBarra,
+                l.Titulo           AS TituloLibro,
+                DATEDIFF(DAY, p.FechaVencimientoUtc, ISNULL(p.FechaDevolucionUtc, m.CreadoUtc)) AS DiasAtraso
+            FROM dbo.Multas m
+            JOIN dbo.Clientes  c  ON c.Id  = m.IdCliente
+            JOIN dbo.Prestamos p  ON p.Id  = m.IdPrestamo
+            JOIN dbo.Copias    cp ON cp.Id = p.IdCopia
+            JOIN dbo.Libros    l  ON l.Id  = cp.IdLibro
+            WHERE m.Estado = 'EXONERADA'
+              AND m.IdCliente = ?
+            ORDER BY m.PagadoUtc DESC, m.CreadoUtc DESC
+            """;
+
+        try (Connection conn = Conexion.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, idCliente);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    multas.add(mapearMultaConJoin(rs));
+                }
+            }
+        }
+        return multas;
     }
 }

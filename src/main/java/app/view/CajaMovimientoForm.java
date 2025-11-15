@@ -130,7 +130,7 @@ public class CajaMovimientoForm extends JFrame{
             movApertura.setConcepto("Apertura de caja (fondo inicial)");
             movApertura.setMonto(montoInicial);
 
-            if (movimientoDAO.crear(movApertura)) { // Asumiendo que renombraste 'crear' a 'registrar'
+            if (movimientoDAO.reistrar(movApertura)) { // Asumiendo que renombraste 'crear' a 'registrar'
                 mostrarInfo("Apertura registrada correctamente. ID Sesión: " + nuevaSesion.getId());
                 consultarMovimientos(); // Refrescar la tabla
             }
@@ -168,7 +168,7 @@ public class CajaMovimientoForm extends JFrame{
             mov.setIdMulta(idMulta);
 
             // 3. Registrar el movimiento (usando el DAO de Movimientos)
-            if (movimientoDAO.crear(mov)) {
+            if (movimientoDAO.reistrar(mov)) {
                 mostrarInfo("Ingreso registrado correctamente.");
                 consultarMovimientos();
             }

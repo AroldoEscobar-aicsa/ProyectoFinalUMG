@@ -10,7 +10,7 @@ import java.time.format.DateTimeFormatter;
  */
 public abstract class ReporteBase {
 
-    protected static final DateTimeFormatter FORMATO_FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    public static final DateTimeFormatter FORMATO_FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     protected static final DateTimeFormatter FORMATO_FECHA_ARCHIVO = DateTimeFormatter.ofPattern("yyyyMMdd");
 
     protected String titulo;

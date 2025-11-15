@@ -115,39 +115,46 @@ public class ReporteDAO {
     public List<ReporteCatalogo> getReporteCatalogoCompleto() {
         List<ReporteCatalogo> reporte = new ArrayList<>();
 
-        // Esta consulta usa 'WITH' (CTE) para pre-calcular
-        // el stock de copias y luego une todo lo demás.
+        // Esta consulta V2 usa 'OUTER APPLY' (subconsultas)
+        // para evitar el 'DISTINCT' y ser más eficiente.
         String sql = """
-            WITH ConteoCopias AS (
-                -- Subconsulta para contar copias
-                SELECT
-                    IdLibro,
-                    COUNT(*) AS TotalCopias,
-                    SUM(CASE WHEN Estado = 'DISPONIBLE' THEN 1 ELSE 0 END) AS CopiasDisponibles
-                FROM Copias
-                GROUP BY IdLibro
-            )
             SELECT
                 L.Titulo,
                 L.ISBN,
                 L.Anio,
                 E.Nombre AS Editorial,
-                -- Agrupa todos los autores de un libro en un string
-                STRING_AGG(DISTINCT A.Nombre, ', ') AS Autores,
-                -- Agrupa todas las categorías de un libro en un string
-                STRING_AGG(DISTINCT CAT.Nombre, ', ') AS Categorias,
+                ISNULL(Autores.Lista, '') AS Autores,
+                ISNULL(Categorias.Lista, '') AS Categorias,
                 ISNULL(CC.TotalCopias, 0) AS TotalCopias,
                 ISNULL(CC.CopiasDisponibles, 0) AS CopiasDisponibles
             FROM Libros L
             LEFT JOIN Editoriales E ON L.IdEditorial = E.Id
-            LEFT JOIN LibroAutores LA ON L.Id = LA.IdLibro
-            LEFT JOIN Autores A ON LA.IdAutor = A.Id
-            LEFT JOIN LibroCategorias LC ON L.Id = LC.IdLibro
-            LEFT JOIN Categorias CAT ON LC.IdCategoria = CAT.Id
-            LEFT JOIN ConteoCopias CC ON L.Id = CC.IdLibro
-            GROUP BY
-                L.Id, L.Titulo, L.ISBN, L.Anio, E.Nombre, 
-                CC.TotalCopias, CC.CopiasDisponibles
+            
+            -- Subconsulta para contar copias
+            OUTER APPLY (
+                SELECT
+                    COUNT(*) AS TotalCopias,
+                    SUM(CASE WHEN Estado = 'DISPONIBLE' THEN 1 ELSE 0 END) AS CopiasDisponibles
+                FROM Copias C
+                WHERE C.IdLibro = L.Id
+            ) CC
+            
+            -- Subconsulta para agregar autores
+            OUTER APPLY (
+                SELECT STRING_AGG(A.Nombre, ', ') AS Lista
+                FROM LibroAutores LA
+                JOIN Autores A ON LA.IdAutor = A.Id
+                WHERE LA.IdLibro = L.Id
+            ) Autores
+
+            -- Subconsulta para agregar categorías
+            OUTER APPLY (
+                SELECT STRING_AGG(CAT.Nombre, ', ') AS Lista
+                FROM LibroCategorias LC
+                JOIN Categorias CAT ON LC.IdCategoria = CAT.Id
+                WHERE LC.IdLibro = L.Id
+            ) Categorias
+
             ORDER BY
                 L.Titulo;
             """;
@@ -155,6 +162,9 @@ public class ReporteDAO {
         try (Connection conn = Conexion.getConnection(); // Tu clase de conexión
              PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
+
+            // ... (el resto del método 'while (rs.next())'
+            //      sigue exactamente igual que antes) ...
 
             while (rs.next()) {
                 ReporteCatalogo item = new ReporteCatalogo();

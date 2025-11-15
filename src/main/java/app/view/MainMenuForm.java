@@ -1,6 +1,7 @@
 package app.view;
 
 import app.model.Usuario;
+import app.view.ReportesOperativosForm;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -118,6 +119,7 @@ public class MainMenuForm extends JFrame {
         btnRecaudacion        = createTileButton("Recaudación", "Resumen de ingresos", "📈");
         btnReportesFinancieros= createTileButton("Reportes financieros", "Informes de caja y multas", "📉");
         btnExoneraciones      = createTileButton("Exoneraciones", "Gestión de condonaciones", "✅");
+
 
         // Agregamos todos al panel (el permiso los habilita / deshabilita)
         tiles.add(btnAutores);
@@ -386,10 +388,6 @@ public class MainMenuForm extends JFrame {
             }
         });
 
-        btnReportesOperativos.addActionListener(e ->
-                showInfo("Módulo \"Reportes operativos\" aún no implementado.")
-        );
-
         btnMultas.addActionListener(e -> {
             try {
                 new MultaForm().setVisible(true);
@@ -413,6 +411,9 @@ public class MainMenuForm extends JFrame {
         btnExoneraciones.addActionListener(e ->
                 showInfo("Módulo \"Exoneraciones\" aún no implementado.")
         );
+        btnReportesOperativos.addActionListener(e -> {
+            new ReportesOperativosForm(this).setVisible(true);
+        });
     }
 
     private void showInfo(String msg) {

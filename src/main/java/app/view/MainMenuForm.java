@@ -404,9 +404,11 @@ public class MainMenuForm extends JFrame {
                 showInfo("Módulo \"Recaudación\" aún no implementado.")
         );
 
-        btnReportesFinancieros.addActionListener(e ->
-                showInfo("Módulo \"Reportes financieros\" aún no implementado.")
-        );
+        btnReportesFinancieros.addActionListener(e -> {
+            // Simplemente abre el nuevo formulario "Todo en Uno"
+            new ReportesFinancierosForm(this).setVisible(true);
+
+        });
 
         btnExoneraciones.addActionListener(e ->
                 showInfo("Módulo \"Exoneraciones\" aún no implementado.")

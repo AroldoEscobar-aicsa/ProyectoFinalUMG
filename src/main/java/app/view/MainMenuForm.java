@@ -113,9 +113,9 @@ public class MainMenuForm extends JFrame {
         btnReportesOperativos    = createTileButton("Reportes operativos", "Movimientos diarios", "📊");
 
         // Botones nuevos (Financiero)
-        btnMultas             = createTileButton("Caja diaria", "Gestión de multas, corte y arqueo", "💰");
-        //btnCajaDiaria         = createTileButton("Caja diaria", "Corte y arqueo", "🧾");
-        btnRecaudacion        = createTileButton("Adquisiciones", "Solicitudes de compra", "💰");
+        btnMultas             = createTileButton("Multas", "Gestión de multas", "💰");
+        btnCajaDiaria         = createTileButton("Caja diaria", "Corte y arqueo", "🧾");
+        btnRecaudacion        = createTileButton("Recaudación", "Resumen de ingresos", "📈");
         btnReportesFinancieros= createTileButton("Reportes financieros", "Informes de caja y multas", "📉");
         btnExoneraciones      = createTileButton("Exoneraciones", "Gestión de condonaciones", "✅");
 
@@ -136,7 +136,7 @@ public class MainMenuForm extends JFrame {
         tiles.add(btnReportesOperativos);
         tiles.add(btnMultas);
 
-        //tiles.add(btnCajaDiaria);
+        tiles.add(btnCajaDiaria);
         tiles.add(btnRecaudacion);
         tiles.add(btnReportesFinancieros);
         tiles.add(btnExoneraciones);
@@ -218,7 +218,7 @@ public class MainMenuForm extends JFrame {
         btnReportesOperativos.setEnabled(false);
 
         btnMultas.setEnabled(false);
-        //btnCajaDiaria.setEnabled(false);
+        btnCajaDiaria.setEnabled(false);
         btnRecaudacion.setEnabled(false);
         btnReportesFinancieros.setEnabled(false);
         btnExoneraciones.setEnabled(false);
@@ -247,7 +247,7 @@ public class MainMenuForm extends JFrame {
                 btnReportesOperativos.setEnabled(true);
 
                 btnMultas.setEnabled(true);
-                //btnCajaDiaria.setEnabled(true);
+                btnCajaDiaria.setEnabled(true);
                 btnRecaudacion.setEnabled(true);
                 btnReportesFinancieros.setEnabled(true);
                 btnExoneraciones.setEnabled(true);
@@ -265,14 +265,13 @@ public class MainMenuForm extends JFrame {
                 btnInventarioFisico.setEnabled(true);
                 btnReportesOperativos.setEnabled(true);
                 btnEditoriales.setEnabled(true);
-                btnRecaudacion.setEnabled(true);
                 break;
 
             case "FINANCIERO":
                 // Multas, Caja diaria, Recaudación, Reportes financieros, Exoneraciones
                 btnMultas.setEnabled(true);
-                // btnCajaDiaria.setEnabled(true);
-                // btnRecaudacion.setEnabled(true);
+                btnCajaDiaria.setEnabled(true);
+                btnRecaudacion.setEnabled(true);
                 btnReportesFinancieros.setEnabled(true);
                 btnExoneraciones.setEnabled(true);
                 break;
@@ -399,9 +398,9 @@ public class MainMenuForm extends JFrame {
             }
         });
 
-        //btnCajaDiaria.addActionListener(e ->
-        //showInfo("Módulo \"Caja diaria\" aún no implementado.")
-        //);
+        btnCajaDiaria.addActionListener(e ->
+                showInfo("Módulo \"Caja diaria\" aún no implementado.")
+        );
 
         btnRecaudacion.addActionListener(e ->
                 showInfo("Módulo \"Recaudación\" aún no implementado.")
@@ -411,13 +410,9 @@ public class MainMenuForm extends JFrame {
                 showInfo("Módulo \"Reportes financieros\" aún no implementado.")
         );
 
-        btnExoneraciones.addActionListener(e -> {
-            try {
-                new ExoneracionesForm().setVisible(true);
-            } catch (Throwable ex) {
-                showError("No se pudo abrir Editoriales: " + ex.getMessage());
-            }
-        });
+        btnExoneraciones.addActionListener(e ->
+                showInfo("Módulo \"Exoneraciones\" aún no implementado.")
+        );
     }
 
     private void showInfo(String msg) {

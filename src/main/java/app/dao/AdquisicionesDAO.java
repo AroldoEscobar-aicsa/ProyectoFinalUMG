@@ -1,118 +1,220 @@
 package app.dao;
 
 import app.db.Conexion;
-import app.model.Adquisiciones;
+import app.model.Proveedores;
+import app.model.SolicitudCompra;
 
 import java.sql.*;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 public class AdquisicionesDAO {
 
-    public boolean registrarAdquisicion(Adquisiciones a) throws SQLException {
-        String sql = "INSERT INTO Adquisiciones " +
-                "(codigoCompra, proveedor, categoria, descripcion, cantidad, costoUnitario, fechaSolicitud, fechaAprobacion, estado, eliminado) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
+    // ------------------ PROVEEDORES ------------------
 
-        try (Connection conn = Conexion.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+    public List<Proveedores> listarProveedoresActivos() throws SQLException {
+        String sql = """
+            SELECT Id, Nombre, NIT, Telefono, Email, IsActive
+            FROM dbo.Proveedores
+            WHERE IsActive = 1
+            ORDER BY Nombre
+            """;
 
-            pstmt.setString(1, a.getCodigoCompra());
-            pstmt.setString(2, a.getProveedor());
-            pstmt.setString(3, a.getCategoria());
-            pstmt.setString(4, a.getDescripcion());
-            pstmt.setInt(5, a.getCantidad());
-            pstmt.setDouble(6, a.getCostoUnitario());
+        List<Proveedores> lista = new ArrayList<>();
 
-            if (a.getFechaSolicitud() != null)
-                pstmt.setDate(7, new java.sql.Date(a.getFechaSolicitud().getTime()));
-            else
-                pstmt.setNull(7, Types.DATE);
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
 
-            if (a.getFechaAprobacion() != null)
-                pstmt.setDate(8, new java.sql.Date(a.getFechaAprobacion().getTime()));
-            else
-                pstmt.setNull(8, Types.DATE);
-
-            pstmt.setString(9, a.getEstado());
-
-            return pstmt.executeUpdate() > 0;
-        }
-    }
-
-    public boolean actualizarAdquisicion(Adquisiciones a) throws SQLException {
-        String sql = "UPDATE Adquisiciones SET " +
-                "codigoCompra=?, proveedor=?, categoria=?, descripcion=?, cantidad=?, costoUnitario=?, " +
-                "fechaSolicitud=?, fechaAprobacion=?, estado=? " +
-                "WHERE idAdquisicion=? AND eliminado=0";
-
-        try (Connection conn = Conexion.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            pstmt.setString(1, a.getCodigoCompra());
-            pstmt.setString(2, a.getProveedor());
-            pstmt.setString(3, a.getCategoria());
-            pstmt.setString(4, a.getDescripcion());
-            pstmt.setInt(5, a.getCantidad());
-            pstmt.setDouble(6, a.getCostoUnitario());
-            pstmt.setDate(7, a.getFechaSolicitud() != null ? new java.sql.Date(a.getFechaSolicitud().getTime()) : null);
-            pstmt.setDate(8, a.getFechaAprobacion() != null ? new java.sql.Date(a.getFechaAprobacion().getTime()) : null);
-            pstmt.setString(9, a.getEstado());
-            pstmt.setInt(10, a.getIdAdquisicion());
-
-            return pstmt.executeUpdate() > 0;
-        }
-    }
-
-    public boolean eliminarAdquisicion(int idAdquisicion) throws SQLException {
-        String sql = "UPDATE Adquisiciones SET eliminado = 1 WHERE idAdquisicion = ?";
-        try (Connection conn = Conexion.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setInt(1, idAdquisicion);
-            return pstmt.executeUpdate() > 0;
-        }
-    }
-
-    public Adquisiciones buscarPorId(int idAdquisicion) throws SQLException {
-        String sql = "SELECT * FROM Adquisiciones WHERE idAdquisicion = ? AND eliminado = 0";
-
-        try (Connection conn = Conexion.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setInt(1, idAdquisicion);
-
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) return mapearResultSet(rs);
+            while (rs.next()) {
+                Proveedores p = new Proveedores();
+                p.setId(rs.getInt("Id"));
+                p.setNombre(rs.getString("Nombre"));
+                p.setNit(rs.getString("NIT"));
+                p.setTelefono(rs.getString("Telefono"));
+                p.setEmail(rs.getString("Email"));
+                p.setActive(rs.getBoolean("IsActive"));
+                lista.add(p);
             }
-        }
-        return null;
-    }
-
-    public List<Adquisiciones> listarAdquisicionesActivas() throws SQLException {
-        List<Adquisiciones> lista = new ArrayList<>();
-        String sql = "SELECT * FROM Adquisiciones WHERE eliminado = 0 ORDER BY fechaSolicitud DESC";
-
-        try (Connection conn = Conexion.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-
-            while (rs.next()) lista.add(mapearResultSet(rs));
         }
         return lista;
     }
 
-    private Adquisiciones mapearResultSet(ResultSet rs) throws SQLException {
-        Adquisiciones a = new Adquisiciones();
-        a.setIdAdquisicion(rs.getInt("idAdquisicion"));
-        a.setCodigoCompra(rs.getString("codigoCompra"));
-        a.setProveedor(rs.getString("proveedor"));
-        a.setCategoria(rs.getString("categoria"));
-        a.setDescripcion(rs.getString("descripcion"));
-        a.setCantidad(rs.getInt("cantidad"));
-        a.setCostoUnitario(rs.getDouble("costoUnitario"));
-        a.setFechaSolicitud(rs.getDate("fechaSolicitud"));
-        a.setFechaAprobacion(rs.getDate("fechaAprobacion"));
-        a.setEstado(rs.getString("estado"));
-        a.setEliminado(rs.getBoolean("eliminado"));
-        return a;
+    // ------------------ SOLICITUDES DE COMPRA ------------------
+
+    /**
+     * Crea una nueva solicitud de compra:
+     * INSERT INTO SolicitudesCompra(IdLibro, Cantidad, SolicitadoPor)
+     * Estado queda en 'PENDIENTE' por defecto.
+     */
+    public int crearSolicitudCompra(int idLibro, int cantidad, int idUsuarioSolicita) throws SQLException {
+        String sql = """
+            INSERT INTO dbo.SolicitudesCompra(IdLibro, Cantidad, SolicitadoPor)
+            VALUES (?, ?, ?)
+            """;
+
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+
+            ps.setInt(1, idLibro);
+            ps.setInt(2, cantidad);
+            ps.setInt(3, idUsuarioSolicita);
+
+            ps.executeUpdate();
+
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        }
+        throw new SQLException("No se pudo generar Id de SolicitudCompra.");
+    }
+
+    /**
+     * Lista todas las solicitudes de compra con información de libro y usuarios.
+     * (PENDIENTE/APROBADA/RECHAZADA/COMPRADA)
+     */
+    public List<SolicitudCompra> listarSolicitudesCompra() throws SQLException {
+        String sql = """
+            SELECT 
+                s.Id,
+                s.IdLibro,
+                s.Cantidad,
+                s.SolicitadoPor,
+                s.Estado,
+                s.CreadoUtc,
+                s.AprobadoPor,
+                s.AprobadoUtc,
+                l.Titulo AS TituloLibro,
+                uSol.NombreCompleto AS NombreSolicitante,
+                uApr.NombreCompleto AS NombreAprobador
+            FROM dbo.SolicitudesCompra s
+            JOIN dbo.Libros   l    ON l.Id   = s.IdLibro
+            JOIN dbo.Usuarios uSol ON uSol.Id = s.SolicitadoPor
+            LEFT JOIN dbo.Usuarios uApr ON uApr.Id = s.AprobadoPor
+            ORDER BY s.CreadoUtc DESC
+            """;
+
+        List<SolicitudCompra> lista = new ArrayList<>();
+
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                SolicitudCompra sc = new SolicitudCompra();
+                sc.setId(rs.getInt("Id"));
+                sc.setIdLibro(rs.getInt("IdLibro"));
+                sc.setCantidad(rs.getInt("Cantidad"));
+                sc.setSolicitadoPor(rs.getInt("SolicitadoPor"));
+                sc.setEstado(rs.getString("Estado"));
+
+                Timestamp creado = rs.getTimestamp("CreadoUtc");
+                if (creado != null) {
+                    sc.setCreadoUtc(creado.toLocalDateTime());
+                }
+
+                int aprobadoPor = rs.getInt("AprobadoPor");
+                if (!rs.wasNull()) {
+                    sc.setAprobadoPor(aprobadoPor);
+                }
+
+                Timestamp aprobadoUtc = rs.getTimestamp("AprobadoUtc");
+                if (aprobadoUtc != null) {
+                    sc.setAprobadoUtc(aprobadoUtc.toLocalDateTime());
+                }
+
+                sc.setTituloLibro(rs.getString("TituloLibro"));
+                sc.setNombreSolicitante(rs.getString("NombreSolicitante"));
+                sc.setNombreAprobador(rs.getString("NombreAprobador"));
+
+                lista.add(sc);
+            }
+        }
+        return lista;
+    }
+
+    /**
+     * APRUEBA una solicitud de compra (ADMIN/BIBLIOT con permiso ADQ_APROBAR).
+     * Setea Estado='APROBADA', AprobadoPor=@idUsuarioAprueba, AprobadoUtc=SYSUTCDATETIME().
+     */
+    public boolean aprobarSolicitudCompra(int idSolicitud, int idUsuarioAprueba) throws SQLException {
+        String sql = """
+            UPDATE dbo.SolicitudesCompra
+            SET Estado='APROBADA',
+                AprobadoPor = ?,
+                AprobadoUtc = SYSUTCDATETIME()
+            WHERE Id = ?
+              AND Estado = 'PENDIENTE'
+            """;
+
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+
+            ps.setInt(1, idUsuarioAprueba);
+            ps.setInt(2, idSolicitud);
+
+            int filas = ps.executeUpdate();
+            return filas > 0;
+        }
+    }
+
+    /**
+     * (Opcional) Rechazar solicitud de compra.
+     */
+    public boolean rechazarSolicitudCompra(int idSolicitud, int idUsuarioAprueba) throws SQLException {
+        String sql = """
+            UPDATE dbo.SolicitudesCompra
+            SET Estado='RECHAZADA',
+                AprobadoPor = ?,
+                AprobadoUtc = SYSUTCDATETIME()
+            WHERE Id = ?
+              AND Estado = 'PENDIENTE'
+            """;
+
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+
+            ps.setInt(1, idUsuarioAprueba);
+            ps.setInt(2, idSolicitud);
+
+            int filas = ps.executeUpdate();
+            return filas > 0;
+        }
+    }
+
+    // ------------------ REGISTRO DE ADQUISICIÓN ------------------
+
+    /**
+     * Registra la adquisición llamando al SP dbo.sp_Adquisicion_Registrar
+     * que:
+     *  - Verifica que la solicitud esté APROBADA
+     *  - Inserta en Adquisiciones
+     *  - Crea Copias físicas (aumenta stock)
+     *  - Marca SolicitudCompra.Estado = 'COMPRADA'
+     */
+    public void registrarAdquisicionDesdeSolicitud(
+            int idSolicitud,
+            int idProveedor,
+            double costoUnitario,
+            int idUbicacion,
+            String usuarioEjecuta
+    ) throws SQLException {
+
+        String sql = "{ call dbo.sp_Adquisicion_Registrar(?, ?, ?, ?, ?) }";
+
+        try (Connection cn = Conexion.getConnection();
+             CallableStatement cs = cn.prepareCall(sql)) {
+
+            cs.setInt(1, idSolicitud);
+            cs.setInt(2, idProveedor);
+            cs.setBigDecimal(3, java.math.BigDecimal.valueOf(costoUnitario));
+            cs.setInt(4, idUbicacion);
+            cs.setString(5, usuarioEjecuta);
+
+            cs.execute();
+        }
     }
 }

@@ -244,7 +244,7 @@ public class PrestamosDAO {
             JOIN dbo.Clientes CLI ON P.IdCliente = CLI.Id
             JOIN dbo.Copias COP ON P.IdCopia = COP.Id
             JOIN dbo.Libros L ON COP.IdLibro = L.Id
-            WHERE P.IdCliente = ? AND P.Estado = 'CERRADO'
+            WHERE P.IdCliente = ? AND P.Estado = 'ACTIVO'
             ORDER BY P.FechaDevolucionUtc DESC
             """;
 

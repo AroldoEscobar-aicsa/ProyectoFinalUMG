@@ -222,6 +222,68 @@ public class PrestamosDAO {
         return lista;
     }
 
+    // ... (aquí va el método listarPrestamosActivosPorCliente) ...
+
+    /**
+     * ¡MÉTODO AÑADIDO!
+     * Lista el historial de préstamos CERRADOS de un cliente.
+     */
+    public List<Prestamos> listarPrestamosHistorialPorCliente(int idCliente) throws SQLException {
+        // Esta consulta busca en la tabla principal de Préstamos
+        // y se une a otras tablas para obtener los nombres.
+        final String sql = """
+            SELECT 
+                P.Id, P.IdCliente, P.IdCopia, 
+                P.FechaPrestamoUtc, P.FechaVencimientoUtc, P.FechaDevolucionUtc, 
+                P.Renovaciones, P.Estado,
+                COP.CodigoBarra,
+                L.Titulo,
+                (CLI.Nombres + ' ' + CLI.Apellidos) AS NombreCliente,
+                CLI.Codigo AS CodigoCliente
+            FROM dbo.Prestamos P
+            JOIN dbo.Clientes CLI ON P.IdCliente = CLI.Id
+            JOIN dbo.Copias COP ON P.IdCopia = COP.Id
+            JOIN dbo.Libros L ON COP.IdLibro = L.Id
+            WHERE P.IdCliente = ? AND P.Estado = 'CERRADO'
+            ORDER BY P.FechaDevolucionUtc DESC
+            """;
+
+        List<Prestamos> lista = new ArrayList<>();
+        try (Connection c = Conexion.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+
+            ps.setInt(1, idCliente);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    // Mapeamos el resultado al modelo
+                    // (Asegúrate de que tu app.model.Prestamos tenga estos setters)
+                    Prestamos p = new Prestamos();
+                    p.setId(rs.getInt("Id"));
+                    p.setIdCliente(rs.getInt("IdCliente"));
+                    p.setCodigoCliente(rs.getString("CodigoCliente"));
+                    p.setNombreCliente(rs.getString("NombreCliente"));
+                    p.setIdCopia(rs.getInt("IdCopia"));
+                    p.setCodigoBarra(rs.getString("CodigoBarra"));
+                    p.setTitulo(rs.getString("Titulo"));
+
+                    Timestamp fp = rs.getTimestamp("FechaPrestamoUtc");
+                    Timestamp fv = rs.getTimestamp("FechaVencimientoUtc");
+                    Timestamp fd = rs.getTimestamp("FechaDevolucionUtc");
+
+                    p.setFechaPrestamoUtc(fp != null ? fp.toLocalDateTime() : null);
+                    p.setFechaVencimientoUtc(fv != null ? fv.toLocalDateTime() : null);
+                    p.setFechaDevolucionUtc(fd != null ? fd.toLocalDateTime() : null);
+
+                    p.setRenovaciones(rs.getInt("Renovaciones"));
+                    p.setEstado(rs.getString("Estado"));
+                    lista.add(p);
+                }
+            }
+        }
+        return lista;
+    }
+
     // ====== HELPERS UI ======
 
     public static void showError(Component parent, Exception ex) {
@@ -245,5 +307,84 @@ public class PrestamosDAO {
         public LibroDisp(int idLibro, String titulo, int disponibles) {
             this.idLibro = idLibro; this.titulo = titulo; this.disponibles = disponibles;
         }
+    }
+
+    // ... (aquí va el método listarPrestamosHistorialPorCliente) ...
+
+    /**
+     * ¡MÉTODO AÑADIDO!
+     * Lista TODOS los préstamos (históricos y activos) en un rango de fechas
+     * y, opcionalmente, filtrados por estado.
+     */
+    public List<Prestamos> listarPrestamosPorPeriodo(
+            java.time.LocalDate fechaInicio,
+            java.time.LocalDate fechaFin,
+            String estadoFiltro) throws SQLException {
+
+        StringBuilder sql = new StringBuilder("""
+            SELECT 
+                P.Id, P.IdCliente, P.IdCopia, 
+                P.FechaPrestamoUtc, P.FechaVencimientoUtc, P.FechaDevolucionUtc, 
+                P.Renovaciones, P.Estado,
+                COP.CodigoBarra,
+                L.Titulo,
+                (CLI.Nombres + ' ' + CLI.Apellidos) AS NombreCliente,
+                CLI.Codigo AS CodigoCliente
+            FROM dbo.Prestamos P
+            JOIN dbo.Clientes CLI ON P.IdCliente = CLI.Id
+            JOIN dbo.Copias COP ON P.IdCopia = COP.Id
+            JOIN dbo.Libros L ON COP.IdLibro = L.Id
+            WHERE CAST(P.FechaPrestamoUtc AS DATE) BETWEEN ? AND ? 
+        """);
+
+        // Añadir el filtro de estado SOLO si es necesario
+        // Asumimos que "TODOS" (o un string vacío) no filtra
+        if (estadoFiltro != null && !estadoFiltro.isEmpty() && !estadoFiltro.equalsIgnoreCase("TODOS")) {
+            sql.append(" AND P.Estado = ? ");
+        }
+
+        sql.append(" ORDER BY P.FechaPrestamoUtc DESC");
+
+        List<Prestamos> lista = new ArrayList<>();
+        try (Connection c = Conexion.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql.toString())) {
+
+            // Parámetro 1: Fecha Inicio
+            ps.setDate(1, java.sql.Date.valueOf(fechaInicio));
+            // Parámetro 2: Fecha Fin
+            ps.setDate(2, java.sql.Date.valueOf(fechaFin));
+
+            // Parámetro 3 (Opcional): Estado
+            if (estadoFiltro != null && !estadoFiltro.isEmpty() && !estadoFiltro.equalsIgnoreCase("TODOS")) {
+                ps.setString(3, estadoFiltro);
+            }
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    // Mapeamos el resultado al modelo
+                    Prestamos p = new Prestamos();
+                    p.setId(rs.getInt("Id"));
+                    p.setIdCliente(rs.getInt("IdCliente"));
+                    p.setCodigoCliente(rs.getString("CodigoCliente"));
+                    p.setNombreCliente(rs.getString("NombreCliente"));
+                    p.setIdCopia(rs.getInt("IdCopia"));
+                    p.setCodigoBarra(rs.getString("CodigoBarra"));
+                    p.setTitulo(rs.getString("Titulo"));
+
+                    Timestamp fp = rs.getTimestamp("FechaPrestamoUtc");
+                    Timestamp fv = rs.getTimestamp("FechaVencimientoUtc");
+                    Timestamp fd = rs.getTimestamp("FechaDevolucionUtc");
+
+                    p.setFechaPrestamoUtc(fp != null ? fp.toLocalDateTime() : null);
+                    p.setFechaVencimientoUtc(fv != null ? fv.toLocalDateTime() : null);
+                    p.setFechaDevolucionUtc(fd != null ? fd.toLocalDateTime() : null);
+
+                    p.setRenovaciones(rs.getInt("Renovaciones"));
+                    p.setEstado(rs.getString("Estado"));
+                    lista.add(p);
+                }
+            }
+        }
+        return lista;
     }
 }

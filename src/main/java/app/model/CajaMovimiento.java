@@ -2,57 +2,24 @@ package app.model;
 
 import java.time.LocalDateTime;
 
-/*Representa un movimiento individual en la caja diaria de un usuario.
-Cubre aperturas, ingresos (cobros) y cierres (arqueo)*/
-
+/**
+ * Representa un movimiento individual en una sesión de caja.
+ * Mapea a la tabla CajaMovimientos de la BD.
+ */
 public class CajaMovimiento {
     private int idMovimiento;
-    private int idUsuarioCajero; // El usuario (Financiero) que realiza el movimiento
-    private LocalDateTime fechaHora;
+    private int idCajaSesion;       // FK a CajaSesiones
+    private LocalDateTime creadoUtc;
 
-    /**
-     * Tipo de movimiento: "Apertura", "Ingreso", "Cierre"
-     */
-    private String tipoMovimiento;
-
-    /**
-     * Descripción del movimiento.
-     * Ej: "Fondo inicial", "Pago Multa ID: 123", "Cierre de caja"
-     */
-    private String descripcion;
-
-    /**
-     * Monto del movimiento.
-     * - Positivo para "Apertura" (fondo inicial).
-     * - Positivo para "Ingreso" (cobro de multa).
-     * - Cero para "Cierre".
-     */
+    private String tipo;            // "ENTRADA" o "SALIDA"
+    private String concepto;        // Descripción del movimiento
     private double monto;
 
-    /**
-     * (Opcional) Referencia a la multa que se está pagando.
-     * Null si es "Apertura" o "Cierre".
-     */
-    private Integer idMulta;
+    private Integer idMulta;        // NULL si no es pago de multa
 
-    // --- Campos de Arqueo (usados solo en "Cierre") ---
-
-    /**
-     * (Solo para "Cierre") Monto total que el sistema calculó.
-     * (Apertura + Suma de Ingresos)
-     */
-    private Double montoCalculadoSistema;
-
-    /**
-     * (Solo para "Cierre") Monto que el cajero contó físicamente.
-     */
-    private Double montoRealContado;
-
-    /**
-     * (Solo para "Cierre") Diferencia: (montoRealContado - montoCalculadoSistema)
-     */
-    private Double diferencia;
-
+    // Constructor
+    public CajaMovimiento() {
+    }
 
     // --- Getters y Setters ---
 
@@ -64,36 +31,36 @@ public class CajaMovimiento {
         this.idMovimiento = idMovimiento;
     }
 
-    public int getIdUsuarioCajero() {
-        return idUsuarioCajero;
+    public int getIdCajaSesion() {
+        return idCajaSesion;
     }
 
-    public void setIdUsuarioCajero(int idUsuarioCajero) {
-        this.idUsuarioCajero = idUsuarioCajero;
+    public void setIdCajaSesion(int idCajaSesion) {
+        this.idCajaSesion = idCajaSesion;
     }
 
-    public LocalDateTime getFechaHora() {
-        return fechaHora;
+    public LocalDateTime getCreadoUtc() {
+        return creadoUtc;
     }
 
-    public void setFechaHora(LocalDateTime fechaHora) {
-        this.fechaHora = fechaHora;
+    public void setCreadoUtc(LocalDateTime creadoUtc) {
+        this.creadoUtc = creadoUtc;
     }
 
-    public String getTipoMovimiento() {
-        return tipoMovimiento;
+    public String getTipo() {
+        return tipo;
     }
 
-    public void setTipoMovimiento(String tipoMovimiento) {
-        this.tipoMovimiento = tipoMovimiento;
+    public void setTipo(String tipo) {
+        this.tipo = tipo;
     }
 
-    public String getDescripcion() {
-        return descripcion;
+    public String getConcepto() {
+        return concepto;
     }
 
-    public void setDescripcion(String descripcion) {
-        this.descripcion = descripcion;
+    public void setConcepto(String concepto) {
+        this.concepto = concepto;
     }
 
     public double getMonto() {
@@ -110,29 +77,5 @@ public class CajaMovimiento {
 
     public void setIdMulta(Integer idMulta) {
         this.idMulta = idMulta;
-    }
-
-    public Double getMontoCalculadoSistema() {
-        return montoCalculadoSistema;
-    }
-
-    public void setMontoCalculadoSistema(Double montoCalculadoSistema) {
-        this.montoCalculadoSistema = montoCalculadoSistema;
-    }
-
-    public Double getMontoRealContado() {
-        return montoRealContado;
-    }
-
-    public void setMontoRealContado(Double montoRealContado) {
-        this.montoRealContado = montoRealContado;
-    }
-
-    public Double getDiferencia() {
-        return diferencia;
-    }
-
-    public void setDiferencia(Double diferencia) {
-        this.diferencia = diferencia;
     }
 }

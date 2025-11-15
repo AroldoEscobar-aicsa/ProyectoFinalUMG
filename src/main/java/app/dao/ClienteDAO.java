@@ -31,7 +31,8 @@ public class ClienteDAO {
     // ---------- CRUD ----------
     public List<Cliente> listarTodos() throws SQLException {
         String sql = """
-            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado
+            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado, 
+                   ISNULL(MoraAcumulada, 0) as MoraAcumulada
             FROM dbo.Clientes
             ORDER BY Apellidos, Nombres
         """;
@@ -46,7 +47,8 @@ public class ClienteDAO {
 
     public List<Cliente> listarActivos() throws SQLException {
         String sql = """
-            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado
+            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado,
+                   ISNULL(MoraAcumulada, 0) as MoraAcumulada
             FROM dbo.Clientes
             WHERE IsActive = 1
             ORDER BY Apellidos, Nombres
@@ -62,7 +64,8 @@ public class ClienteDAO {
 
     public Cliente buscarPorId(int id) throws SQLException {
         String sql = """
-            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado
+            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado,
+                   ISNULL(MoraAcumulada, 0) as MoraAcumulada
             FROM dbo.Clientes WHERE Id=?
         """;
         try (Connection cn = Conexion.getConnection();
@@ -74,7 +77,8 @@ public class ClienteDAO {
 
     public Cliente buscarPorCodigo(String codigo) throws SQLException {
         String sql = """
-            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado
+            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado,
+                   ISNULL(MoraAcumulada, 0) as MoraAcumulada
             FROM dbo.Clientes WHERE Codigo=?
         """;
         try (Connection cn = Conexion.getConnection();
@@ -87,8 +91,8 @@ public class ClienteDAO {
     /** Inserta sin columnas de fecha no existentes. */
     public void crear(Cliente c) throws SQLException {
         String sql = """
-            INSERT INTO dbo.Clientes (Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO dbo.Clientes (Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado, MoraAcumulada)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.00)
         """;
         try (Connection cn = Conexion.getConnection();
              PreparedStatement ps = cn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -154,6 +158,84 @@ public class ClienteDAO {
         }
     }
 
+    // ---------- MÉTODOS NUEVOS PARA MÓDULO FINANCIERO ----------
+
+    /**
+     * Actualiza la mora acumulada del cliente.
+     * Usado cuando se cobra o genera una multa.
+     */
+    public boolean actualizarMoraAcumulada(int idCliente, double nuevaMora) throws SQLException {
+        String sql = "UPDATE dbo.Clientes SET MoraAcumulada = ? WHERE Id = ?";
+
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+
+            ps.setDouble(1, nuevaMora);
+            ps.setInt(2, idCliente);
+
+            return ps.executeUpdate() > 0;
+        }
+    }
+
+    /**
+     * Incrementa la mora acumulada del cliente.
+     * Usado cuando se genera una nueva multa.
+     */
+    public boolean incrementarMora(int idCliente, double montoMulta) throws SQLException {
+        String sql = "UPDATE dbo.Clientes SET MoraAcumulada = MoraAcumulada + ? WHERE Id = ?";
+
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql)) {
+
+            ps.setDouble(1, montoMulta);
+            ps.setInt(2, idCliente);
+
+            return ps.executeUpdate() > 0;
+        }
+    }
+
+    /**
+     * Obtiene lista de clientes morosos (con mora > 0).
+     * Útil para reportes financieros.
+     */
+    public List<Cliente> listarMorosos() throws SQLException {
+        String sql = """
+            SELECT Id, Codigo, Nombres, Apellidos, NIT, Telefono, Email, IsActive, Estado, MoraAcumulada
+            FROM dbo.Clientes
+            WHERE MoraAcumulada > 0 AND IsActive = 1
+            ORDER BY MoraAcumulada DESC
+        """;
+
+        List<Cliente> lista = new ArrayList<>();
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                lista.add(map(rs));
+            }
+        }
+        return lista;
+    }
+
+    /**
+     * Obtiene el total de mora acumulada de todos los clientes.
+     * Útil para reportes ejecutivos.
+     */
+    public double getTotalMoraAcumulada() throws SQLException {
+        String sql = "SELECT ISNULL(SUM(MoraAcumulada), 0) as Total FROM dbo.Clientes WHERE IsActive = 1";
+
+        try (Connection cn = Conexion.getConnection();
+             PreparedStatement ps = cn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            if (rs.next()) {
+                return rs.getDouble("Total");
+            }
+        }
+        return 0.0;
+    }
+
     // ---------- Helpers ----------
     private Cliente map(ResultSet rs) throws SQLException {
         Cliente c = new Cliente();
@@ -166,6 +248,14 @@ public class ClienteDAO {
         c.setEmail(rs.getString("Email"));
         c.setActivo(rs.getBoolean("IsActive"));
         c.setEstado(rs.getString("Estado"));
+
+        // Agregar mora acumulada
+        try {
+            c.setMoraAcumulada(rs.getDouble("MoraAcumulada"));
+        } catch (SQLException e) {
+            c.setMoraAcumulada(0.0); // Por si acaso la columna no existe
+        }
+
         return c;
     }
 

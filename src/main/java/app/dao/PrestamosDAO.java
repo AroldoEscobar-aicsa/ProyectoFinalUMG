@@ -246,4 +246,87 @@ public class PrestamosDAO {
             this.idLibro = idLibro; this.titulo = titulo; this.disponibles = disponibles;
         }
     }
+    /**
+     * Lista préstamos por rango de fechas con JOIN completo.
+     * Útil para reportes.
+     */
+    public List<Prestamos> listarPrestamosPorPeriodo(
+            java.time.LocalDate fechaInicio,
+            java.time.LocalDate fechaFin,
+            String estadoFiltro  // null = todos, o "ACTIVO", "CERRADO", "ATRASADO"
+    ) throws SQLException {
+
+        StringBuilder sql = new StringBuilder("""
+        SELECT 
+            p.Id,
+            p.IdCliente,
+            cli.Codigo AS CodigoCliente,
+            (cli.Nombres + ' ' + cli.Apellidos) AS NombreCliente,
+            p.IdCopia,
+            cop.CodigoBarra,
+            lib.Id AS IdLibro,
+            lib.Titulo,
+            p.FechaPrestamoUtc,
+            p.FechaVencimientoUtc,
+            p.FechaDevolucionUtc,
+            p.Renovaciones,
+            p.Estado,
+            ISNULL(m.Monto, 0) AS MultaCalculada
+        FROM dbo.Prestamos p
+        INNER JOIN dbo.Clientes cli ON p.IdCliente = cli.Id
+        INNER JOIN dbo.Copias cop ON p.IdCopia = cop.Id
+        INNER JOIN dbo.Libros lib ON cop.IdLibro = lib.Id
+        LEFT JOIN dbo.Multas m ON m.IdPrestamo = p.Id
+        WHERE CAST(p.FechaPrestamoUtc AS DATE) BETWEEN ? AND ?
+    """);
+
+        if (estadoFiltro != null && !estadoFiltro.trim().isEmpty()) {
+            sql.append(" AND p.Estado = ?");
+        }
+
+        sql.append(" ORDER BY p.FechaPrestamoUtc DESC");
+
+        List<Prestamos> lista = new ArrayList<>();
+
+        try (Connection c = Conexion.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql.toString())) {
+
+            ps.setDate(1, java.sql.Date.valueOf(fechaInicio));
+            ps.setDate(2, java.sql.Date.valueOf(fechaFin));
+
+            if (estadoFiltro != null && !estadoFiltro.trim().isEmpty()) {
+                ps.setString(3, estadoFiltro);
+            }
+
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Prestamos p = new Prestamos();
+                    p.setId(rs.getInt("Id"));
+                    p.setIdCliente(rs.getInt("IdCliente"));
+                    p.setCodigoCliente(rs.getString("CodigoCliente"));
+                    p.setNombreCliente(rs.getString("NombreCliente"));
+                    p.setIdCopia(rs.getInt("IdCopia"));
+                    p.setCodigoBarra(rs.getString("CodigoBarra"));
+                    p.setIdLibro(rs.getInt("IdLibro"));
+                    p.setTitulo(rs.getString("Titulo"));
+
+                    Timestamp fp = rs.getTimestamp("FechaPrestamoUtc");
+                    Timestamp fv = rs.getTimestamp("FechaVencimientoUtc");
+                    Timestamp fd = rs.getTimestamp("FechaDevolucionUtc");
+
+                    p.setFechaPrestamoUtc(fp != null ? fp.toLocalDateTime() : null);
+                    p.setFechaVencimientoUtc(fv != null ? fv.toLocalDateTime() : null);
+                    p.setFechaDevolucionUtc(fd != null ? fd.toLocalDateTime() : null);
+
+                    p.setRenovaciones(rs.getInt("Renovaciones"));
+                    p.setEstado(rs.getString("Estado"));
+                    p.setMultaCalculada(rs.getDouble("MultaCalculada"));
+
+                    lista.add(p);
+                }
+            }
+        }
+
+        return lista;
+    }
 }

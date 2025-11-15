@@ -86,7 +86,6 @@ public class PrestamosDAO {
                   AND c.IsActive = 1
                   AND c.Estado = 'DISPONIBLE'
             ) disp
-            WHERE l.IsActive = 1
             ORDER BY l.Titulo
         """;
         List<LibroDisp> res = new ArrayList<>();
@@ -246,65 +245,5 @@ public class PrestamosDAO {
         public LibroDisp(int idLibro, String titulo, int disponibles) {
             this.idLibro = idLibro; this.titulo = titulo; this.disponibles = disponibles;
         }
-    }
-
-    /** Lista TODOS los préstamos de un cliente (historial completo). */
-    public List<Prestamos> listarPrestamosHistorialPorCliente(int idCliente) throws SQLException {
-        final String sql = """
-            SELECT 
-                p.Id,
-                p.IdCliente,
-                c.Codigo,
-                (RTRIM(LTRIM(c.Nombres)) + ' ' + RTRIM(LTRIM(c.Apellidos))) AS Nombres,
-                p.IdCopia,
-                cp.CodigoBarra,
-                l.Id AS IdLibro,
-                l.Titulo,
-                p.FechaPrestamoUtc,
-                p.FechaVencimientoUtc,
-                p.FechaDevolucionUtc,
-                p.Renovaciones,
-                p.Estado,
-                p.MultaCalculada
-            FROM dbo.Prestamos p
-            JOIN dbo.Clientes c ON c.Id = p.IdCliente
-            JOIN dbo.Copias   cp ON cp.Id = p.IdCopia
-            JOIN dbo.Libros   l  ON l.Id = cp.IdLibro
-            WHERE p.IdCliente = ?
-            ORDER BY p.FechaPrestamoUtc DESC
-        """;
-
-        List<Prestamos> lista = new ArrayList<>();
-        try (Connection c = Conexion.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setInt(1, idCliente);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    Prestamos p = new Prestamos();
-                    p.setId(rs.getInt("Id"));
-                    p.setIdCliente(rs.getInt("IdCliente"));
-                    p.setCodigoCliente(rs.getString("Codigo"));
-                    p.setNombreCliente(rs.getString("Nombres"));
-                    p.setIdCopia(rs.getInt("IdCopia"));
-                    p.setCodigoBarra(rs.getString("CodigoBarra"));
-                    p.setIdLibro(rs.getInt("IdLibro"));
-                    p.setTitulo(rs.getString("Titulo"));
-
-                    Timestamp fp = rs.getTimestamp("FechaPrestamoUtc");
-                    Timestamp fv = rs.getTimestamp("FechaVencimientoUtc");
-                    Timestamp fd = rs.getTimestamp("FechaDevolucionUtc");
-                    p.setFechaPrestamoUtc(fp != null ? fp.toLocalDateTime() : null);
-                    p.setFechaVencimientoUtc(fv != null ? fv.toLocalDateTime() : null);
-                    p.setFechaDevolucionUtc(fd != null ? fd.toLocalDateTime() : null);
-
-                    p.setRenovaciones(rs.getInt("Renovaciones"));
-                    p.setEstado(rs.getString("Estado"));
-                    p.setMultaCalculada(rs.getDouble("MultaCalculada"));
-
-                    lista.add(p);
-                }
-            }
-        }
-        return lista;
     }
 }

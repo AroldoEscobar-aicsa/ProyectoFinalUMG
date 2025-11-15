@@ -1,79 +1,70 @@
 package app.dao;
 
-import java.util.Map;
-import java.util.List;
-import java.util.HashMap;
-import java.util.ArrayList;
-import java.time.LocalDate;
-
 import app.db.Conexion;
 import app.model.CajaMovimiento;
+
 import java.sql.*;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
+/**
+ * DAO para movimientos de caja (entradas/salidas en una sesión).
+ * Actualizado para coincidir con la estructura SQL real.
+ */
 public class CajaMovimientoDAO {
-    /*Registra cualquier movimiento de caja (Apertura, Ingreso, Cierre).
-     Este es el metodo central de la caja.*/
 
-    public boolean registrar(CajaMovimiento mov) throws SQLException {
-        // SQL Server maneja bien los nulos para campos no especificados
-        String sql = "INSERT INTO CajaMovimiento (idUsuarioCajero, fechaHora, tipoMovimiento, " +
-                "descripcion, monto, idMulta, montoCalculadoSistema, montoRealContado, diferencia) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    /**
+     * Registra un nuevo movimiento de caja (ENTRADA o SALIDA).
+     */
+    public boolean crear(CajaMovimiento movimiento) throws SQLException {
+        String sql = "INSERT INTO CajaMovimientos " +
+                "(IdCajaSesion, Tipo, Concepto, Monto, IdMulta, CreadoUtc) " +
+                "VALUES (?, ?, ?, ?, ?, GETUTCDATE())";
 
         try (Connection conn = Conexion.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+             PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
-            pstmt.setInt(1, mov.getIdUsuarioCajero());
-            pstmt.setTimestamp(2, Timestamp.valueOf(mov.getFechaHora()));
-            pstmt.setString(3, mov.getTipoMovimiento());
-            pstmt.setString(4, mov.getDescripcion());
-            pstmt.setDouble(5, mov.getMonto());
+            pstmt.setInt(1, movimiento.getIdCajaSesion());
+            pstmt.setString(2, movimiento.getTipo());
+            pstmt.setString(3, movimiento.getConcepto());
+            pstmt.setDouble(4, movimiento.getMonto());
 
-            // Manejo de nulos para FK y campos de cierre
-            if (mov.getIdMulta() != null) {
-                pstmt.setInt(6, mov.getIdMulta());
+            // IdMulta puede ser NULL
+            if (movimiento.getIdMulta() != null) {
+                pstmt.setInt(5, movimiento.getIdMulta());
             } else {
-                pstmt.setNull(6, Types.INTEGER);
+                pstmt.setNull(5, Types.INTEGER);
             }
 
-            if (mov.getMontoCalculadoSistema() != null) {
-                pstmt.setDouble(7, mov.getMontoCalculadoSistema());
-            } else {
-                pstmt.setNull(7, Types.DECIMAL);
-            }
+            int rows = pstmt.executeUpdate();
 
-            if (mov.getMontoRealContado() != null) {
-                pstmt.setDouble(8, mov.getMontoRealContado());
-            } else {
-                pstmt.setNull(8, Types.DECIMAL);
+            if (rows > 0) {
+                try (ResultSet rs = pstmt.getGeneratedKeys()) {
+                    if (rs.next()) {
+                        movimiento.setIdMovimiento(rs.getInt(1));
+                    }
+                }
+                return true;
             }
-
-            if (mov.getDiferencia() != null) {
-                pstmt.setDouble(9, mov.getDiferencia());
-            } else {
-                pstmt.setNull(9, Types.DECIMAL);
-            }
-
-            return pstmt.executeUpdate() > 0;
+            return false;
         }
     }
 
     /**
-     * Obtiene todos los movimientos de un cajero en una fecha específica.
-     * Usado para el "Resumen por fecha/usuario".
+     * Obtiene todos los movimientos de una sesión de caja.
      */
-    public List<CajaMovimiento> getMovimientosDiaUsuario(int idUsuarioCajero, LocalDate fecha) throws SQLException {
+    public List<CajaMovimiento> getMovimientosPorSesion(int idCajaSesion) throws SQLException {
         List<CajaMovimiento> movimientos = new ArrayList<>();
-        // CONVERT(DATE, ...) es sintaxis de SQL Server para ignorar la hora
-        String sql = "SELECT * FROM CajaMovimiento " +
-                "WHERE idUsuarioCajero = ? AND CONVERT(DATE, fechaHora) = ? " +
-                "ORDER BY fechaHora ASC";
+
+        String sql = "SELECT * FROM CajaMovimientos " +
+                "WHERE IdCajaSesion = ? " +
+                "ORDER BY CreadoUtc ASC";
 
         try (Connection conn = Conexion.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            pstmt.setInt(1, idUsuarioCajero);
-            pstmt.setDate(2, Date.valueOf(fecha));
+            pstmt.setInt(1, idCajaSesion);
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
@@ -85,110 +76,160 @@ public class CajaMovimientoDAO {
     }
 
     /**
-     * Verifica si un cajero ya tiene una caja abierta (Apertura)
-     * pero aún no la ha cerrado (Cierre) para el día de hoy.
+     * Calcula el total de una sesión de caja.
+     * Suma: ENTRADAS - SALIDAS
      */
-    public boolean verificarCajaAbierta(int idUsuarioCajero, LocalDate fecha) throws SQLException {
-        String sqlApertura = "SELECT COUNT(*) FROM CajaMovimiento WHERE idUsuarioCajero = ? AND CONVERT(DATE, fechaHora) = ? AND tipoMovimiento = 'Apertura'";
-        String sqlCierre = "SELECT COUNT(*) FROM CajaMovimiento WHERE idUsuarioCajero = ? AND CONVERT(DATE, fechaHora) = ? AND tipoMovimiento = 'Cierre'";
-
-        try (Connection conn = Conexion.getConnection();
-             PreparedStatement pstmtApertura = conn.prepareStatement(sqlApertura);
-             PreparedStatement pstmtCierre = conn.prepareStatement(sqlCierre)) {
-
-            pstmtApertura.setInt(1, idUsuarioCajero);
-            pstmtApertura.setDate(2, Date.valueOf(fecha));
-
-            pstmtCierre.setInt(1, idUsuarioCajero);
-            pstmtCierre.setDate(2, Date.valueOf(fecha));
-
-            boolean hayApertura = false;
-            try(ResultSet rsA = pstmtApertura.executeQuery()) {
-                if(rsA.next() && rsA.getInt(1) > 0) {
-                    hayApertura = true;
-                }
-            }
-
-            boolean hayCierre = false;
-            try(ResultSet rsC = pstmtCierre.executeQuery()) {
-                if(rsC.next() && rsC.getInt(1) > 0) {
-                    hayCierre = true;
-                }
-            }
-
-            return hayApertura && !hayCierre; // Abierta si hay apertura Y NO hay cierre
-        }
-    }
-
-    /**
-     * Calcula el total del sistema para el arqueo.
-     * Suma la Apertura + todos los Ingresos de un cajero para una fecha.
-     */
-    public double calcularTotalSistemaDia(int idUsuarioCajero, LocalDate fecha) throws SQLException {
-        String sql = "SELECT SUM(monto) FROM CajaMovimiento " +
-                "WHERE idUsuarioCajero = ? AND CONVERT(DATE, fechaHora) = ? " +
-                "AND tipoMovimiento IN ('Apertura', 'Ingreso')";
+    public double calcularTotalSesion(int idCajaSesion) throws SQLException {
+        String sql = "SELECT " +
+                "ISNULL(SUM(CASE WHEN Tipo = 'ENTRADA' THEN Monto ELSE 0 END), 0) - " +
+                "ISNULL(SUM(CASE WHEN Tipo = 'SALIDA' THEN Monto ELSE 0 END), 0) AS Total " +
+                "FROM CajaMovimientos " +
+                "WHERE IdCajaSesion = ?";
 
         try (Connection conn = Conexion.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            pstmt.setInt(1, idUsuarioCajero);
-            pstmt.setDate(2, Date.valueOf(fecha));
+            pstmt.setInt(1, idCajaSesion);
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    return rs.getDouble(1); // Devuelve la suma
+                    return rs.getDouble("Total");
                 }
             }
         }
-        return 0.0; // Si no hay movimientos
+        return 0.0;
     }
 
-    // --- REPORTE DE RECAUDACIÓN ---
-    // (Este es solo un ejemplo, puedes hacerlo tan complejo como necesites)
-    public List<Map<String, Object>> getReporteRecaudacion(LocalDate fechaInicio, LocalDate fechaFin) throws SQLException {
-        List<Map<String, Object>> reporte = new ArrayList<>();
-        String sql = "SELECT CONVERT(DATE, fechaHora) as Fecha, idUsuarioCajero, SUM(monto) as TotalRecaudado " +
-                "FROM CajaMovimiento " +
-                "WHERE tipoMovimiento = 'Ingreso' AND fechaHora BETWEEN ? AND ? " +
-                "GROUP BY CONVERT(DATE, fechaHora), idUsuarioCajero " +
-                "ORDER BY Fecha, idUsuarioCajero";
+    /**
+     * Obtiene solo las ENTRADAS de una sesión (para reportes).
+     */
+    public List<CajaMovimiento> getEntradasPorSesion(int idCajaSesion) throws SQLException {
+        List<CajaMovimiento> entradas = new ArrayList<>();
+
+        String sql = "SELECT * FROM CajaMovimientos " +
+                "WHERE IdCajaSesion = ? AND Tipo = 'ENTRADA' " +
+                "ORDER BY CreadoUtc ASC";
 
         try (Connection conn = Conexion.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            pstmt.setTimestamp(1, Timestamp.valueOf(fechaInicio.atStartOfDay()));
-            pstmt.setTimestamp(2, Timestamp.valueOf(fechaFin.atTime(23, 59, 59)));
+            pstmt.setInt(1, idCajaSesion);
 
-            try(ResultSet rs = pstmt.executeQuery()) {
-                while(rs.next()) {
-                    Map<String, Object> fila = new HashMap<>();
-                    fila.put("Fecha", rs.getDate("Fecha").toLocalDate());
-                    fila.put("idUsuarioCajero", rs.getInt("idUsuarioCajero"));
-                    fila.put("TotalRecaudado", rs.getDouble("TotalRecaudado"));
-                    reporte.add(fila);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    entradas.add(mapearResultSet(rs));
                 }
             }
         }
-        return reporte;
+        return entradas;
     }
 
+    /**
+     * REPORTE: Obtiene todos los movimientos en un rango de fechas.
+     * Útil para reportes de recaudación.
+     */
+    public List<CajaMovimiento> getMovimientosPorRangoFechas(
+            LocalDate fechaInicio,
+            LocalDate fechaFin,
+            String tipo) throws SQLException {
 
-    // --- Helper ---
+        List<CajaMovimiento> movimientos = new ArrayList<>();
+
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT cm.* FROM CajaMovimientos cm ");
+        sql.append("JOIN CajaSesiones cs ON cs.Id = cm.IdCajaSesion ");
+        sql.append("WHERE CAST(cs.AbiertaUtc AS DATE) BETWEEN ? AND ? ");
+
+        if (tipo != null && !tipo.isEmpty()) {
+            sql.append("AND cm.Tipo = ? ");
+        }
+
+        sql.append("ORDER BY cm.CreadoUtc DESC");
+
+        try (Connection conn = Conexion.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql.toString())) {
+
+            pstmt.setDate(1, Date.valueOf(fechaInicio));
+            pstmt.setDate(2, Date.valueOf(fechaFin));
+
+            if (tipo != null && !tipo.isEmpty()) {
+                pstmt.setString(3, tipo);
+            }
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    movimientos.add(mapearResultSet(rs));
+                }
+            }
+        }
+        return movimientos;
+    }
+
+    /**
+     * Obtiene el total recaudado en un rango de fechas.
+     */
+    public double getTotalRecaudado(LocalDate fechaInicio, LocalDate fechaFin) throws SQLException {
+        String sql = "SELECT ISNULL(SUM(cm.Monto), 0) AS Total " +
+                "FROM CajaMovimientos cm " +
+                "JOIN CajaSesiones cs ON cs.Id = cm.IdCajaSesion " +
+                "WHERE cm.Tipo = 'ENTRADA' " +
+                "AND CAST(cs.AbiertaUtc AS DATE) BETWEEN ? AND ?";
+
+        try (Connection conn = Conexion.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setDate(1, Date.valueOf(fechaInicio));
+            pstmt.setDate(2, Date.valueOf(fechaFin));
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getDouble("Total");
+                }
+            }
+        }
+        return 0.0;
+    }
+
+    /**
+     * Busca un movimiento por ID.
+     */
+    public CajaMovimiento buscarPorId(int idMovimiento) throws SQLException {
+        String sql = "SELECT * FROM CajaMovimientos WHERE Id = ?";
+
+        try (Connection conn = Conexion.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setInt(1, idMovimiento);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapearResultSet(rs);
+                }
+            }
+        }
+        return null;
+    }
+
+    // --- Helper para mapear ResultSet ---
     private CajaMovimiento mapearResultSet(ResultSet rs) throws SQLException {
-        CajaMovimiento m = new CajaMovimiento();
-        m.setIdMovimiento(rs.getInt("idMovimiento"));
-        m.setIdUsuarioCajero(rs.getInt("idUsuarioCajero"));
-        m.setFechaHora(rs.getTimestamp("fechaHora").toLocalDateTime());
-        m.setTipoMovimiento(rs.getString("tipoMovimiento"));
-        m.setDescripcion(rs.getString("descripcion"));
-        m.setMonto(rs.getDouble("monto"));
+        CajaMovimiento mov = new CajaMovimiento();
 
-        m.setIdMulta((Integer) rs.getObject("idMulta")); // Maneja nulos
-        m.setMontoCalculadoSistema((Double) rs.getObject("montoCalculadoSistema"));
-        m.setMontoRealContado((Double) rs.getObject("montoRealContado"));
-        m.setDiferencia((Double) rs.getObject("diferencia"));
+        mov.setIdMovimiento(rs.getInt("Id"));
+        mov.setIdCajaSesion(rs.getInt("IdCajaSesion"));
+        mov.setTipo(rs.getString("Tipo"));
+        mov.setConcepto(rs.getString("Concepto"));
+        mov.setMonto(rs.getDouble("Monto"));
 
-        return m;
+        Timestamp ts = rs.getTimestamp("CreadoUtc");
+        if (ts != null) {
+            mov.setCreadoUtc(ts.toLocalDateTime());
+        }
+
+        // IdMulta puede ser NULL
+        int idMulta = rs.getInt("IdMulta");
+        if (!rs.wasNull()) {
+            mov.setIdMulta(idMulta);
+        }
+
+        return mov;
     }
 }

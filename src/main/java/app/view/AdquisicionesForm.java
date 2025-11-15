@@ -41,7 +41,7 @@ public class AdquisicionesForm extends JFrame {
     private JButton btnRefrescar;
     private JButton btnCerrar;
 
-    // ==== Constructor principal (con usuario) ====
+    // ===== Constructor principal (con usuario real) =====
     public AdquisicionesForm(int idUsuarioActual, String usernameActual) {
         this.idUsuarioActual = idUsuarioActual;
         this.usernameActual = usernameActual;
@@ -51,10 +51,9 @@ public class AdquisicionesForm extends JFrame {
         cargarSolicitudes();
     }
 
-    // ==== Constructor sin parámetros (para tu llamada actual) ====
-    // Puedes luego cambiar los valores 1, "admin" por tu usuario real
+    // ===== Constructor sin parámetros (para tu botón actual) =====
     public AdquisicionesForm() {
-        this(1, "admin");
+        this(1, "admin");  // luego puedes pasar el usuario real desde tu menú
     }
 
     private void initUI() {
@@ -64,7 +63,7 @@ public class AdquisicionesForm extends JFrame {
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLayout(new BorderLayout(10, 10));
 
-        // ------------------ PANEL SUPERIOR: CREAR SOLICITUD ------------------
+        // =============== PANEL SUPERIOR: CREAR SOLICITUD ===============
         JPanel panelSolicitud = new JPanel(new GridBagLayout());
         panelSolicitud.setBorder(BorderFactory.createTitledBorder("Crear Solicitud de Compra"));
         GridBagConstraints g = new GridBagConstraints();
@@ -73,10 +72,9 @@ public class AdquisicionesForm extends JFrame {
 
         txtIdLibro = new JTextField();
         txtCantidadSolicitud = new JTextField();
-
         btnCrearSolicitud = new JButton("Crear solicitud");
 
-        g.gridx = 0; g.gridy = 0;
+        g.gridx = 0; g.gridy = 0; g.weightx = 0;
         panelSolicitud.add(new JLabel("Id Libro:"), g);
         g.gridx = 1; g.weightx = 1;
         panelSolicitud.add(txtIdLibro, g);
@@ -89,7 +87,7 @@ public class AdquisicionesForm extends JFrame {
         g.gridx = 4; g.gridy = 0; g.weightx = 0;
         panelSolicitud.add(btnCrearSolicitud, g);
 
-        // ------------------ PANEL CENTRAL: TABLA SOLICITUDES ------------------
+        // =============== PANEL CENTRAL: TABLA SOLICITUDES ===============
         String[] cols = {
                 "IdSolicitud", "Libro", "Cantidad", "Estado",
                 "Solicitante", "Aprobador",
@@ -106,7 +104,7 @@ public class AdquisicionesForm extends JFrame {
 
         JScrollPane scrollTabla = new JScrollPane(tablaSolicitudes);
 
-        // ------------------ PANEL INFERIOR: APROBACIÓN Y COMPRA ------------------
+        // =============== PANEL INFERIOR: APROBACIÓN Y COMPRA ===============
         JPanel panelAcciones = new JPanel(new GridBagLayout());
         panelAcciones.setBorder(BorderFactory.createTitledBorder("Aprobación y Registro de Compra"));
         GridBagConstraints a = new GridBagConstraints();
@@ -126,7 +124,7 @@ public class AdquisicionesForm extends JFrame {
         btnCerrar = new JButton("Cerrar");
 
         int row = 0;
-        a.gridx = 0; a.gridy = row;
+        a.gridx = 0; a.gridy = row; a.weightx = 0;
         panelAcciones.add(new JLabel("Id Solicitud seleccionada:"), a);
         a.gridx = 1; a.weightx = 1;
         panelAcciones.add(txtIdSolicitudSeleccionada, a);
@@ -158,14 +156,14 @@ public class AdquisicionesForm extends JFrame {
         panelBotonesAccion.add(btnCerrar);
         panelAcciones.add(panelBotonesAccion, a);
 
-        // ------------------ ARMAR FRAME ------------------
+        // =============== ARMAR FRAME ===============
         add(panelSolicitud, BorderLayout.NORTH);
         add(scrollTabla, BorderLayout.CENTER);
         add(panelAcciones, BorderLayout.SOUTH);
 
-        // ------------------ EVENTOS ------------------
+        // =============== EVENTOS ===============
 
-        // Selección en la tabla -> mostrar IdSolicitud
+        // Click en tabla → llenar IdSolicitud
         tablaSolicitudes.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -184,7 +182,7 @@ public class AdquisicionesForm extends JFrame {
         btnCerrar.addActionListener(e -> dispose());
     }
 
-    // ------------------ LÓGICA ------------------
+    // ================== LÓGICA ==================
 
     private void cargarProveedores() {
         try {
@@ -220,7 +218,7 @@ public class AdquisicionesForm extends JFrame {
                 });
             }
         } catch (SQLException ex) {
-            mostrarError("Error al cargar solicitudes: " + ex.getMessage());
+            mostrarError("Error al cargar solicitudes");
         }
     }
 
@@ -255,6 +253,7 @@ public class AdquisicionesForm extends JFrame {
 
         try {
             int idSolicitud = Integer.parseInt(txtId);
+
             int opt = JOptionPane.showConfirmDialog(this,
                     "¿Aprobar la solicitud #" + idSolicitud + "?",
                     "Confirmar aprobación",
@@ -341,7 +340,7 @@ public class AdquisicionesForm extends JFrame {
         }
     }
 
-    // ------------------ UTIL ------------------
+    // ================== UTIL ==================
 
     private void mostrarError(String msg) {
         JOptionPane.showMessageDialog(this, msg, "Error", JOptionPane.ERROR_MESSAGE);

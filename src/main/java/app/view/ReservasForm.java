@@ -5,7 +5,7 @@ import app.dao.PrestamosDAO.ClienteMin;
 import app.dao.PrestamosDAO.LibroDisp;
 import app.dao.ReservaDAO;
 import app.model.Usuario;
-import model.Reserva;
+import app.model.Reserva;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;

@@ -320,6 +320,8 @@ public class ReportesFinancierosForm extends JDialog {
                             tabla.addCell(GeneradorPDF.crearCelda(String.format("Q %.2f", item.getMontoTotalDeuda()), TextAlignment.RIGHT));
                         }
                         doc.add(tabla);
+
+                        GeneradorPDF.agregarPiePagina(doc, "OLA");
                         doc.close();
                     }
                     return null;
@@ -417,6 +419,7 @@ public class ReportesFinancierosForm extends JDialog {
                         tabla.addCell(GeneradorPDF.crearCeldaTotal("").setMargin(0).setPadding(0).setBorder(null));
 
                         doc.add(tabla);
+                        GeneradorPDF.agregarPiePagina(doc,"DIOS ME AMA");
                         doc.close();
                     }
                     return null;

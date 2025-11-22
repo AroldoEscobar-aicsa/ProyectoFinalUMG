@@ -152,13 +152,14 @@ public class GeneradorPDF {
      * Agrega un pie de página con totales o resumen.
      */
     public static void agregarPiePagina(Document document, String texto) {
+        // Añadimos una línea en blanco para asegurar la separación de la tabla.
         document.add(new Paragraph("\n"));
 
         Paragraph pie = new Paragraph(texto)
-                .setFontSize(10)
+                .setFontSize(9) // Usamos una fuente más pequeña para el pie de página
                 .setItalic()
                 .setTextAlignment(TextAlignment.CENTER)
-                .setMarginTop(20);
+                .setMarginTop(10); // Reducimos el margen a 10 puntos (antes era 20)
 
         document.add(pie);
     }

@@ -1,7 +1,7 @@
 package app.dao;
 
 import app.db.Conexion;
-import model.Reserva;
+import app.model.Reserva;
 
 import java.sql.*;
 import java.util.ArrayList;
